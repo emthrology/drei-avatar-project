@@ -45,7 +45,7 @@ drei-avatar-project/
 │   │   ├── CompanionAvatar.tsx   # VRM 로딩 + 립싱크 + 아이들 애니메이션
 │   │   ├── DebugPanel.tsx        # 컴패니언 디버그 패널 (상태/이벤트/언어/VRM 로드)
 │   │   ├── useLipsync.ts         # word timing → VRM expressionManager viseme
-│   │   ├── useIdleAnimation.ts   # 숨쉬기(chest bone) + 눈깜빡임
+│   │   ├── useIdleAnimation.ts   # 팔내리기 + 숨쉬기 + 머리 미세움직임 + 눈깜빡임
 │   │   ├── useGameEvents.ts      # window game:event 수신
 │   │   ├── tts.ts                # Google TTS REST API → AudioBuffer + word timing
 │   │   └── locales.ts            # ko/en 반응 대사 + TTS_CONFIG
@@ -111,7 +111,9 @@ window.dispatchEvent(new CustomEvent('game:event', {
 ```
 
 ### 아이들 애니메이션 (useIdleAnimation.ts)
+- 팔 내리기: T포즈 → UpperArm Z ±1.3rad로 slerp(0.08) — 로드 후 ~1초에 걸쳐 대기 포즈 정착
 - 숨쉬기: chest bone quaternion slerp `sin(time * 0.8) * 0.015`
+- 머리 미세 움직임: 좌우 0.27Hz ±0.04rad + 끄덕 0.53Hz ±0.02rad, slerp(0.05)
 - 눈깜빡임: open → closing(70ms) → opening(100ms) → open(2~5s 랜덤)
 
 ### 립싱크 (useLipsync.ts)
@@ -144,11 +146,13 @@ VITE_GOOGLE_TTS_API_KEY=your_key_here
 
 VRM 로드 흐름: 파일 선택 → `URL.createObjectURL(file)` → `setCompanionAvatarUrl(url)` → `effectiveAvatarUrl` 변경 → `<CompanionOverlay key={effectiveAvatarUrl} />` 리마운트
 
-## 알려진 미해결 버그
+## 해결된 버그 (이력)
 
-- **TTS 소리 없음** — AudioContext가 유저 제스처 컨텍스트 밖에서 생성됨 (첫 await 이후). 수정 필요.
-- **캐릭터 상반신 클리핑** — 컴패니언 카메라가 얼굴만 보임 (fov:28, lookAt y=1.45). 상반신이 보이도록 조정 필요.
-- **T-포즈 (idle 없음)** — useIdleAnimation 진폭이 너무 작아 육안으로 동작 확인 불가 (0.015 rad). 가시적 움직임 구현 필요.
+- ~~TTS 소리 없음~~ — 원인은 `VITE_GOOGLE_TTS_API_KEY` 부재. `.env`에 키 추가 후 정상 동작 확인 (키는 gitignore됨).
+- ~~캐릭터 상반신 클리핑~~ — 본 위치 기반 자동 프레이밍으로 해결. `computeUpperBodyCamera()`가 Head/Hips 본에서 상반신 범위 계산 → fov 28 기준 거리 산출 (CompanionAvatar.tsx).
+- ~~T-포즈 고정~~ — useIdleAnimation에 팔 내리기 포즈(UpperArm Z ±1.3rad slerp) + 머리 미세 움직임 추가.
+- ~~DebugPanel 상태 미반영~~ — CompanionOverlay에 `onStatusChange`/`onSpeak` 콜백 추가하여 App까지 상태 전달.
+- ~~expressionManager.update() 이중 호출~~ — useLipsync의 수동 호출 제거 (`vrm.update(delta)`가 내부 처리).
 
 ## 구현 로드맵
 
@@ -157,8 +161,53 @@ VRM 로드 흐름: 파일 선택 → `URL.createObjectURL(file)` → `setCompani
 - [x] Phase 3: MToon 셰이더 파라미터 UI (outlineWidthFactor, rim, shadingToony)
 - [x] 컴패니언 모드: 게임 이벤트 반응, 말풍선, Google TTS, 립싱크, 숨쉬기+눈깜빡임
 - [x] 컴패니언 DebugPanel: 5173 UX 포팅, VRM 직접 로드 (blob URL)
-- [ ] 버그 수정: TTS AudioContext, 카메라 상반신 프레이밍, idle 애니메이션 가시성
+- [x] 버그 수정: TTS API 키, 카메라 상반신 프레이밍, idle 애니메이션 가시성
+- [ ] **TalkingHead 포팅 로드맵 (아래 섹션 참고)** ← 현재 진행 단계
 - [ ] Phase 4: 애니메이션 미리보기 (내장 클립 재생), 스크린샷/내보내기
+
+## TalkingHead 포팅 로드맵
+
+TalkingHead 1.3 소스(3,994줄) 분석 결과, 핵심 기능 전부 VRM으로 재현 가능. 일부는 VRM이 우위.
+
+### VRM 실측 데이터 (male_sample.vrm 파싱 결과)
+
+- **VRM 1.0**, preset expressions 14종: happy/angry/sad/relaxed/surprised + aa/ih/ou/ee/oh + blink/blinkL/R + neutral
+- **lookAt type: bone** — 눈동자 본 제어 네이티브 (`vrm.lookAt.target = camera` 한 줄)
+- **springBones 내장** — 머리카락/옷 물리 자동 (`vrm.update()`가 처리, TalkingHead엔 없는 기능)
+- **face morph 57개** — `Fcl_BRW_*`(눈썹), `Fcl_EYE_*`(눈), `Fcl_MTH_*`(입) 부위별 감정 모프 → ARKit 셰이프 조합 기반 무드 표현 재현 가능
+
+### 진행 순서 (의존성 기준, 알파벳순 아님)
+
+| 순서 | 단계 | 내용 | 의존성 | 권장 모델 |
+|------|------|------|--------|----------|
+| 1 | A. 시선 | `vrm.lookAt.target = camera` + 사케이드 랜덤 오프셋 | 독립 | Sonnet |
+| 2 | D. 립싱크 업그레이드 | TalkingHead `lipsync-en.mjs`(Three.js 의존성 없음) 이식 + **합성 viseme 확장 (D2 직행)**: `registerExpression()`으로 VRoid `Fcl_MTH_*` 모프 조합 → Oculus 15개 중 12~13개 재현. 모프 이름 감지 실패 시 preset 5개 fallback | 독립 | Sonnet |
+| 3 | B. 애니메이션 스케줄러 | `animFactory` 선언적 시퀀스 엔진 포팅 (~300줄). `{delay, dt, vs}` + gaussian 랜덤 + idle/speaking 분기. 무드 시스템의 기반 | 기반 코드 | 상위 모델 |
+| 4 | C. 포즈 전환 | 2~3개 대기 포즈 랜덤 전환. **B의 'pose' 트랙으로 구동** (독립 타이머로 먼저 만들면 재작업됨) | B 필요 | Sonnet |
+| 5 | E. 제스처 (선택) | speakWithHands 등 본 회전 시퀀스. VRM humanoid 손가락 본 표준화되어 있음 | B 필요 | Sonnet |
+
+### D 단계: 합성 viseme 레시피
+
+VRM preset은 입 모양 5개(aa/ih/ou/ee/oh)지만, VRoid 모델의 추가 입 모프를 조합해 런타임 확장:
+
+| Oculus viseme | 합성 레시피 (VRoid 모프) |
+|---|---|
+| PP (b/p/m) | `Fcl_MTH_Close` 1.0 |
+| FF (f/v) | `Fcl_MTH_Close` 0.5 + `Fcl_MTH_Small` 0.4 |
+| SS (s/z) | `Fcl_MTH_I` 0.4 + `Fcl_MTH_Small` 0.3 |
+| DD/nn/kk | `Fcl_MTH_I` 또는 `Fcl_MTH_E` 저강도 |
+| CH | `Fcl_MTH_U` 0.5 + `Fcl_MTH_I` 0.3 |
+| sil | 전부 0 |
+| aa/E/ih/oh/ou | preset 그대로 |
+
+- 구현: `expressionManager.registerExpression()` — 모델 파일 수정 불필요
+- **이식성 필수**: `Fcl_MTH_*`는 VRoid 명명 규칙. 비VRoid 모델 대비 모프 이름 감지 → 없으면 preset 5개 fallback
+
+### 알려진 한계 (수용)
+
+- TH/RR viseme: 혀 지오메트리가 모델에 없어 근사치 — Blender 수작업 필요라 스킵
+- 콧잔등 등 ARKit 미세 모프 부재 — 300×400px 오버레이에선 식별 불가
+- IK(`touchAt`)는 스킵 — three.js CCDIKSolver로 가능하나 니치 기능
 
 ## 주의사항
 

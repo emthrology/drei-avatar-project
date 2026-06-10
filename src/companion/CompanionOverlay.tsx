@@ -1,7 +1,8 @@
-import { Suspense, useCallback, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
+import { useThree } from '@react-three/fiber'
 import { useGameEvents } from './useGameEvents'
-import { CompanionAvatar } from './CompanionAvatar'
+import { CompanionAvatar, type CameraSettings } from './CompanionAvatar'
 import { googleTTS, type SpeakPayload } from './tts'
 import { type Lang, type Reaction } from './locales'
 
@@ -10,21 +11,41 @@ const TTS_API_KEY = import.meta.env.VITE_GOOGLE_TTS_API_KEY
 interface Props {
   avatarUrl: string
   lang: Lang
+  onStatusChange?: (status: 'loading' | 'ready' | 'speaking') => void
+  onSpeak?: (text: string) => void
 }
 
-export function CompanionOverlay({ avatarUrl, lang }: Props) {
+// VRM 로드 후 계산된 본 기반 카메라 세팅을 적용
+function CameraRig({ settings }: { settings: CameraSettings }) {
+  const { camera } = useThree()
+  useEffect(() => {
+    camera.position.set(...settings.position)
+    camera.lookAt(...settings.target)
+  }, [settings, camera])
+  return null
+}
+
+export function CompanionOverlay({ avatarUrl, lang, onStatusChange, onSpeak }: Props) {
   const speakRef = useRef<((payload: SpeakPayload) => void) | null>(null)
   const [bubble, setBubble] = useState<string | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'speaking'>('loading')
+  const [cameraSettings, setCameraSettings] = useState<CameraSettings | null>(null)
+
+  function updateStatus(s: 'loading' | 'ready' | 'speaking') {
+    setStatus(s)
+    onStatusChange?.(s)
+  }
 
   const handleReady = useCallback((speak: (payload: SpeakPayload) => void) => {
     speakRef.current = speak
-    setStatus('ready')
-  }, [])
+    updateStatus('ready')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onStatusChange])
 
   const handleReaction = useCallback(async (reaction: Reaction) => {
     setBubble(reaction.text)
-    setStatus('speaking')
+    updateStatus('speaking')
+    onSpeak?.(reaction.text)
 
     if (TTS_API_KEY) {
       try {
@@ -32,17 +53,18 @@ export function CompanionOverlay({ avatarUrl, lang }: Props) {
         speakRef.current?.(payload)
         setTimeout(() => {
           setBubble(null)
-          setStatus('ready')
+          updateStatus('ready')
         }, payload.audio.duration * 1000 + 500)
       } catch (e) {
         console.error('TTS failed:', e)
         setBubble(null)
-        setStatus('ready')
+        updateStatus('ready')
       }
     } else {
-      setTimeout(() => { setBubble(null); setStatus('ready') }, 5000)
+      setTimeout(() => { setBubble(null); updateStatus('ready') }, 5000)
     }
-  }, [lang])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang, onStatusChange, onSpeak])
 
   useGameEvents(handleReaction, lang)
 
@@ -90,10 +112,9 @@ export function CompanionOverlay({ avatarUrl, lang }: Props) {
       </div>
 
       <Canvas
-        camera={{ position: [0, 1.45, 1.2], fov: 28 }}
+        camera={{ position: [0, 1.4, 2.5], fov: 28 }}
         gl={{ antialias: true, alpha: true }}
         style={{ background: 'transparent' }}
-        onCreated={({ camera }) => camera.lookAt(0, 1.45, 0)}
       >
         <ambientLight intensity={0.6} />
         <directionalLight position={[0.5, 2, 2]} intensity={2.0} />
@@ -104,8 +125,12 @@ export function CompanionOverlay({ avatarUrl, lang }: Props) {
             key={avatarUrl}
             url={avatarUrl}
             onReady={handleReady}
+            onCameraReady={setCameraSettings}
           />
         </Suspense>
+
+        {/* VRM 로드 완료 후 본 기반으로 카메라 세팅 적용 */}
+        {cameraSettings && <CameraRig settings={cameraSettings} />}
       </Canvas>
     </div>
   )

@@ -89,8 +89,7 @@ export function useLipsync(vrmRef: React.RefObject<VRM | null>) {
     ]
     allVisemes.forEach((v) => vrm.expressionManager!.setValue(v, 0))
     if (active) vrm.expressionManager.setValue(active.viseme, 0.8)
-
-    vrm.expressionManager.update()
+    // expressionManager.update()는 CompanionAvatar의 vrm.update(delta)가 호출함 — 중복 제거
 
     void delta // suppress unused warning
   })

@@ -20,7 +20,7 @@ export default function App() {
     window.dispatchEvent(new CustomEvent('game:event', { detail: { type } }))
   }
 
-  function handleAvatarLoad(url: string) {
+  function handleAvatarLoad(url: string, _label: string) {
     setCompanionAvatarUrl(url)
     setCompanionStatus('loading')
     setLastText('')
@@ -90,6 +90,8 @@ export default function App() {
             key={effectiveAvatarUrl}
             avatarUrl={effectiveAvatarUrl}
             lang={lang}
+            onStatusChange={setCompanionStatus}
+            onSpeak={setLastText}
           />
         </div>
       )}
