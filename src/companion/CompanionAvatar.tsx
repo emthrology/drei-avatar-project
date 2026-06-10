@@ -4,7 +4,8 @@ import { useFrame } from '@react-three/fiber'
 import { VRMLoaderPlugin, VRM, VRMUtils, VRMHumanBoneName } from '@pixiv/three-vrm'
 import * as THREE from 'three'
 import { useLipsync } from './useLipsync'
-import { useIdleAnimation } from './useIdleAnimation'
+import { useAnimator } from './anim/useAnimator'
+import { type StateName } from './anim/scheduler'
 import { useLookAt } from './useLookAt'
 import { type SpeakPayload } from './tts'
 
@@ -15,6 +16,7 @@ export interface CameraSettings {
 
 interface Props {
   url: string
+  speaking: boolean
   onReady: (speak: (payload: SpeakPayload) => void) => void
   onCameraReady?: (s: CameraSettings) => void
 }
@@ -52,8 +54,10 @@ function computeUpperBodyCamera(vrm: VRM): CameraSettings {
   }
 }
 
-export function CompanionAvatar({ url, onReady, onCameraReady }: Props) {
+export function CompanionAvatar({ url, speaking, onReady, onCameraReady }: Props) {
   const vrmRef = useRef<VRM | null>(null)
+  const stateRef = useRef<StateName>('idle')
+  stateRef.current = speaking ? 'speaking' : 'idle'
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const gltf = useGLTF(url, true, true, (loader: any) => {
@@ -64,7 +68,7 @@ export function CompanionAvatar({ url, onReady, onCameraReady }: Props) {
   const vrm: VRM | undefined = (gltf as any).userData?.vrm
 
   const { speak } = useLipsync(vrmRef)
-  useIdleAnimation(vrmRef)
+  useAnimator(vrmRef, stateRef)
   useLookAt(vrmRef)
 
   useEffect(() => {
