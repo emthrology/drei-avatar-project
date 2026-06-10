@@ -38,8 +38,12 @@ function computeUpperBodyCamera(vrm: VRM): CameraSettings {
 
   const torsoHeight = headPos.y - hipsPos.y  // hips → head 본 거리
 
-  // Head 본은 두개골 하단 — 머리카락 끝까지 torso의 약 30% 추가 확보
-  const spanTop = headPos.y + torsoHeight * 0.3
+  // 머리 위 한계: 본 기반 추정(고정 비율)은 헤어/모자 볼륨이 큰 모델에서 잘림.
+  // 실제 메시 바운딩박스 최상단 = 머리카락 끝까지 정확히 포함 (모델 불문)
+  const bbox = new THREE.Box3().setFromObject(vrm.scene)
+  const headEstimate = headPos.y + torsoHeight * 0.3 // bbox 비정상 시 fallback
+  const meshTop = isFinite(bbox.max.y) ? bbox.max.y : headEstimate
+  const spanTop = Math.max(meshTop, headEstimate) + torsoHeight * 0.05 // 머리 위 5% 여백
   const spanBot = hipsPos.y + torsoHeight * 0.15
   const targetY = (spanTop + spanBot) / 2
   const verticalSpan = spanTop - spanBot
