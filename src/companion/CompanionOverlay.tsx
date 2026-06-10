@@ -124,6 +124,7 @@ export function CompanionOverlay({ avatarUrl, lang, onStatusChange, onSpeak }: P
           <CompanionAvatar
             key={avatarUrl}
             url={avatarUrl}
+            speaking={status === 'speaking'}
             onReady={handleReady}
             onCameraReady={setCameraSettings}
           />

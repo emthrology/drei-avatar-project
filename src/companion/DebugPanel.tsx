@@ -1,5 +1,13 @@
 import { useRef, useState } from 'react'
 import { type Lang } from './locales'
+import { MOODS } from './anim/moods'
+
+// 제스처 라벨 목록 (수동 트리거 버튼용). 인덱스가 MOODS.neutral.gestures와 일치
+const GESTURE_LABELS = MOODS.neutral.gestures.map((g, i) => g.label ?? `제스처 ${i}`)
+
+function triggerGesture(index: number) {
+  window.dispatchEvent(new CustomEvent('companion:gesture', { detail: { index } }))
+}
 
 interface Props {
   status: 'loading' | 'ready' | 'speaking'
@@ -116,6 +124,26 @@ export function DebugPanel({ status, lastText, lang, onEvent, onLangChange, onAv
             }}
           >
             {type}
+          </button>
+        ))}
+      </div>
+
+      <hr style={{ border: 'none', borderTop: '1px solid #333', margin: '8px 0' }} />
+
+      {/* 제스처 수동 트리거 */}
+      <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>Gestures</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {GESTURE_LABELS.map((label, i) => (
+          <button
+            key={i}
+            onClick={() => triggerGesture(i)}
+            style={{
+              background: '#312e81', color: '#e0e7ff',
+              border: '1px solid #4f46e5', borderRadius: 6,
+              padding: '4px 8px', cursor: 'pointer', fontSize: 11,
+            }}
+          >
+            {label}
           </button>
         ))}
       </div>
