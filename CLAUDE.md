@@ -162,7 +162,8 @@ VRM 로드 흐름: 파일 선택 → `URL.createObjectURL(file)` → `setCompani
 - [x] 컴패니언 모드: 게임 이벤트 반응, 말풍선, Google TTS, 립싱크, 숨쉬기+눈깜빡임
 - [x] 컴패니언 DebugPanel: 5173 UX 포팅, VRM 직접 로드 (blob URL)
 - [x] 버그 수정: TTS API 키, 카메라 상반신 프레이밍, idle 애니메이션 가시성
-- [ ] **TalkingHead 포팅 로드맵 (아래 섹션 참고)** ← 현재 진행 단계
+- [x] **TalkingHead 포팅 A+D 단계 완료** (시선/사케이드, 합성 viseme 립싱크)
+- [ ] **TalkingHead 포팅 B→C→E 단계** ← 현재 진행 단계
 - [ ] Phase 4: 애니메이션 미리보기 (내장 클립 재생), 스크린샷/내보내기
 
 ## TalkingHead 포팅 로드맵
@@ -180,8 +181,8 @@ TalkingHead 1.3 소스(3,994줄) 분석 결과, 핵심 기능 전부 VRM으로 �
 
 | 순서 | 단계 | 내용 | 의존성 | 권장 모델 |
 |------|------|------|--------|----------|
-| 1 | A. 시선 | `vrm.lookAt.target = camera` + 사케이드 랜덤 오프셋 | 독립 | Sonnet |
-| 2 | D. 립싱크 업그레이드 | TalkingHead `lipsync-en.mjs`(Three.js 의존성 없음) 이식 + **합성 viseme 확장 (D2 직행)**: `registerExpression()`으로 VRoid `Fcl_MTH_*` 모프 조합 → Oculus 15개 중 12~13개 재현. 모프 이름 감지 실패 시 preset 5개 fallback | 독립 | Sonnet |
+| 1 | ✅ A. 시선 | `vrm.lookAt.lookAt()` 직접 호출 + rangeMap 보정(수평 inputMax 50) + center/glance 2상태 사케이드 | 독립 | Sonnet |
+| 2 | ✅ D. 립싱크 업그레이드 | `lipsyncEn.ts` 글자 기반 음소 분해 + `visemeApplier.ts` 이중 경로 (모음→expressionManager / 자음→Fcl_MTH_Close 등 직접 조작). `registerExpression()` 불필요 — 모프 비중복으로 충돌 없음 | 독립 | Fable |
 | 3 | B. 애니메이션 스케줄러 | `animFactory` 선언적 시퀀스 엔진 포팅 (~300줄). `{delay, dt, vs}` + gaussian 랜덤 + idle/speaking 분기. 무드 시스템의 기반 | 기반 코드 | 상위 모델 |
 | 4 | C. 포즈 전환 | 2~3개 대기 포즈 랜덤 전환. **B의 'pose' 트랙으로 구동** (독립 타이머로 먼저 만들면 재작업됨) | B 필요 | Sonnet |
 | 5 | E. 제스처 (선택) | speakWithHands 등 본 회전 시퀀스. VRM humanoid 손가락 본 표준화되어 있음 | B 필요 | Sonnet |
