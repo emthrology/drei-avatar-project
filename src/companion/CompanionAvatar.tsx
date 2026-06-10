@@ -5,6 +5,7 @@ import { VRMLoaderPlugin, VRM, VRMUtils, VRMHumanBoneName } from '@pixiv/three-v
 import * as THREE from 'three'
 import { useLipsync } from './useLipsync'
 import { useIdleAnimation } from './useIdleAnimation'
+import { useLookAt } from './useLookAt'
 import { type SpeakPayload } from './tts'
 
 export interface CameraSettings {
@@ -64,6 +65,7 @@ export function CompanionAvatar({ url, onReady, onCameraReady }: Props) {
 
   const { speak } = useLipsync(vrmRef)
   useIdleAnimation(vrmRef)
+  useLookAt(vrmRef)
 
   useEffect(() => {
     if (!vrm) return
