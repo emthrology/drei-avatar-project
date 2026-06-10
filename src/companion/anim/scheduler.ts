@@ -21,6 +21,7 @@ export interface AnimTemplate {
   loop?: boolean
   alt?: AltBranch[]
   ease?: number // 클립 전용 sigmoid 강도 (작을수록 완만). 생략 시 기본(snap)
+  label?: string // UI 식별용 (디버그 패널 제스처 트리거). 스케줄러는 무시
   // 상태별 서브템플릿 (idle/speaking) — 동적 키라 인덱스 시그니처로 수용
   [state: string]: unknown
 }

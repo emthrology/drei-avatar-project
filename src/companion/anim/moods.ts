@@ -14,19 +14,37 @@ const breathing: AnimTemplate = {
   vs: { 'chest.inhale': [0.5, 0.5, 0] },
 };
 
-// 머리 미동: idle은 느리고 큰 호, speaking은 짧고 빈번. 고정 sine 대신 gaussian 랜덤
+// 머리 미동: idle은 대부분 작은 미동, 가끔 크게 둘러보기(살아있는 느낌). speaking은 빈번.
 const head: AnimTemplate = {
   name: 'head',
   loop: true,
   idle: {
     name: 'head',
-    delay: [0, 1000],
-    dt: [[1000, 5000]],
-    vs: {
-      'head.rotateX': [[-0.02, 0.04]],
-      'head.rotateY': [[-0.05, 0.05]],
-      'head.rotateZ': [[-0.03, 0.03]],
-    },
+    alt: [
+      // 일상 미동 (대부분) — 기존보다 살짝 큼
+      {
+        name: 'head',
+        p: 0.7,
+        delay: [0, 800],
+        dt: [[1000, 4000]],
+        vs: {
+          'head.rotateX': [[-0.03, 0.05]],
+          'head.rotateY': [[-0.09, 0.09]],
+          'head.rotateZ': [[-0.04, 0.04]],
+        },
+      },
+      // 가끔 크게 둘러보기 — 머리를 확 돌렸다 hold-last로 잠시 유지
+      {
+        name: 'head',
+        delay: [600, 2200],
+        dt: [[700, 1500]],
+        vs: {
+          'head.rotateY': [[-0.22, 0.22]],
+          'head.rotateZ': [[-0.07, 0.07]],
+          'head.rotateX': [[-0.04, 0.06]],
+        },
+      },
+    ],
   },
   speaking: {
     name: 'head',
@@ -39,30 +57,47 @@ const head: AnimTemplate = {
   },
 };
 
-// 포즈: 3종 상반신 체중이동을 랜덤 전환. Spine만 회전(Head/팔은 FK 계층 상속).
-// delay=현 포즈 유지 시간(6~16초), dt=전환 이징(2초). hold-last로 전환 사이 자세 유지.
-// 각 alt가 spine 전축을 명시 → 미지정 채널 드리프트 방지(결정적 전환)
+// 포즈: 6종 상반신 체중이동을 랜덤 전환. Spine 회전(Head/팔/Chest는 FK 상속 → 전신 흔들림).
+// 기존보다 진폭 크고 다양하며 더 자주 전환(3~10초) → 적극적인 idle. dt=전환 이징(gaussian).
 const pose: AnimTemplate = {
   name: 'pose',
   loop: true,
   alt: [
     {
       name: 'pose',
-      delay: [6000, 16000],
-      dt: [2000],
-      vs: { 'spine.x': [0.0], 'spine.y': [0.05], 'spine.z': [0.045] },
+      delay: [4000, 10000],
+      dt: [[1400, 2400]],
+      vs: { 'spine.x': [0.0], 'spine.y': [0.06], 'spine.z': [0.05] },
     },
     {
       name: 'pose',
-      delay: [6000, 16000],
-      dt: [2000],
-      vs: { 'spine.x': [0.02], 'spine.y': [-0.06], 'spine.z': [-0.05] },
+      delay: [4000, 10000],
+      dt: [[1400, 2400]],
+      vs: { 'spine.x': [0.03], 'spine.y': [-0.08], 'spine.z': [-0.06] },
     },
     {
       name: 'pose',
-      delay: [6000, 16000],
-      dt: [2000],
-      vs: { 'spine.x': [-0.01], 'spine.y': [0.08], 'spine.z': [0.0] },
+      delay: [4000, 10000],
+      dt: [[1400, 2400]],
+      vs: { 'spine.x': [-0.02], 'spine.y': [0.1], 'spine.z': [0.04] },
+    },
+    {
+      name: 'pose',
+      delay: [4000, 9000],
+      dt: [[1200, 2200]],
+      vs: { 'spine.x': [0.05], 'spine.y': [0.0], 'spine.z': [-0.03] },
+    },
+    {
+      name: 'pose',
+      delay: [3000, 8000],
+      dt: [[1000, 1800]],
+      vs: { 'spine.x': [0.0], 'spine.y': [0.13], 'spine.z': [-0.04] },
+    },
+    {
+      name: 'pose',
+      delay: [3000, 8000],
+      dt: [[1000, 1800]],
+      vs: { 'spine.x': [0.01], 'spine.y': [-0.12], 'spine.z': [0.06] },
     },
   ],
 };
@@ -91,17 +126,17 @@ const blink: AnimTemplate = {
 // 제스처 세트: 발화 시작 시 1개 랜덤 발동(루프 아님). 각 제스처는 독립 템플릿.
 //
 // 구조: vs = [out, hold, rest]. 빠르게 동작(out) → 잠깐 머묾(hold) → 천천히 복귀(rest).
-//   비대칭 타이밍(out < back) + dt를 gaussian 범위로 → 매번 미묘히 달라져 기계적이지 않음.
-//   factory가 선두 null(=live) 자동 추가 → live에서 out으로 부드럽게 시작, rest로 복귀.
-// ease=3.5: 완만한 곡선(기본 snap보다 부드럽게) → 각진 로봇 느낌 제거.
+//   비대칭 타이밍(out < back) + dt gaussian 범위 → 매번 미묘히 달라져 기계적이지 않음.
+//   factory가 선두 null(=live) 자동 추가 → live에서 out으로, rest로 복귀. ease=2.5 완만.
 //
-// 확정 축(시각 검증): armL/R.z(프론탈 들기), elbow.z(굽힘), chest.turnY(몸통 턴),
-// chest.leanZ(몸통 린). 팔 주도 / 몸통 주도로 결을 다양화. 모두 절제된 크기.
+// 결을 다변화 — 팔 주도 / 머리 주도(끄덕·갸웃) / 다가서기·물러서기 / 몸통 기울임 / 손가슴.
+// 검증된 축: armL/R.z(들기), armL.x(−=앞), elbow.z(굽힘), head.gx(+=숙임),
+//   head.gz(+=기울임), chest.leanX(+=앞), chest.turnY/leanZ(몸통 턴/린).
 const GESTURES: AnimTemplate[] = [
   // ── 팔 주도 ──────────────────────────────────────────
-  // 왼손짓 + 몸통 왼쪽
   {
     name: 'gesture',
+    label: '왼손짓',
     ease: 2.5,
     dt: [
       [300, 420],
@@ -115,9 +150,9 @@ const GESTURES: AnimTemplate[] = [
       'chest.leanZ': [-0.04, -0.04, 0],
     },
   },
-  // 오른손짓 + 몸통 오른쪽
   {
     name: 'gesture',
+    label: '오른손짓',
     ease: 2.5,
     dt: [
       [300, 420],
@@ -131,9 +166,9 @@ const GESTURES: AnimTemplate[] = [
       'chest.leanZ': [0.04, 0.04, 0],
     },
   },
-  // 양손 펼침 (가볍게)
   {
     name: 'gesture',
+    label: '양손 펼침',
     ease: 2.5,
     dt: [
       [350, 480],
@@ -148,27 +183,71 @@ const GESTURES: AnimTemplate[] = [
       'chest.turnY': [0.04, 0.04, 0],
     },
   },
-  // 양손 빠른 강조 (짧고 또렷하지만 부드럽게)
+  // ── 머리 주도 (head.g* — idle 미동 위에 합성) ──────────
   {
     name: 'gesture',
+    label: '끄덕',
     ease: 2.5,
     dt: [
-      [230, 320],
-      [180, 320],
-      [450, 620],
+      [200, 280],
+      [150, 300],
+      [400, 550],
     ],
     vs: {
-      'armL.z': [-1.16, -1.16, -1.3],
-      'armR.z': [1.16, 1.16, 1.3],
-      'elbowL.z': [-0.28, -0.28, 0],
-      'elbowR.z': [0.28, 0.28, 0],
-      'chest.turnY': [-0.05, -0.05, 0],
+      'head.gx': [0.14, 0.14, 0],
+      'chest.leanX': [0.04, 0.04, 0],
     },
   },
-  // ── 몸통 주도 (기울여 강조, 팔은 보조) ────────────────
-  // 왼쪽으로 기울임
   {
     name: 'gesture',
+    label: '갸웃',
+    ease: 2.5,
+    dt: [
+      [400, 550],
+      [800, 1200],
+      [550, 750],
+    ],
+    vs: {
+      'head.gz': [0.3, 0.3, 0],
+    },
+  },
+  // ── 다가서기 / 물러서기 (chest.leanX 앞뒤) ─────────────
+  {
+    name: 'gesture',
+    label: '다가서기',
+    ease: 2.5,
+    dt: [
+      [350, 480],
+      [400, 700],
+      [600, 800],
+    ],
+    vs: {
+      'chest.leanX': [0.1, 0.1, 0],
+      'head.gx': [0.05, 0.05, 0],
+      'armL.z': [-1.2, -1.2, -1.3],
+      'armR.z': [1.2, 1.2, 1.3],
+      'elbowL.z': [-0.18, -0.18, 0],
+      'elbowR.z': [0.18, 0.18, 0],
+    },
+  },
+  {
+    name: 'gesture',
+    label: '물러서기',
+    ease: 2.5,
+    dt: [
+      [250, 350],
+      [300, 550],
+      [550, 750],
+    ],
+    vs: {
+      'chest.leanX': [-0.09, -0.09, 0],
+      'head.gx': [-0.07, -0.07, 0],
+    },
+  },
+  // ── 몸통 기울임 (기울여 강조, 팔 보조) ────────────────
+  {
+    name: 'gesture',
+    label: '왼기울임',
     ease: 2.5,
     dt: [
       [350, 480],
@@ -182,9 +261,9 @@ const GESTURES: AnimTemplate[] = [
       'elbowL.z': [-0.18, -0.18, 0],
     },
   },
-  // 오른쪽으로 기울임
   {
     name: 'gesture',
+    label: '오른기울임',
     ease: 2.5,
     dt: [
       [350, 480],
@@ -196,6 +275,24 @@ const GESTURES: AnimTemplate[] = [
       'chest.leanZ': [0.07, 0.07, 0],
       'armR.z': [1.22, 1.22, 1.3],
       'elbowR.z': [0.18, 0.18, 0],
+    },
+  },
+  // ── 손을 가슴에 (진심 — 한 손 가슴쪽 + 고개 기울임) ────
+  // 손가슴 = 팔을 앞으로(armL.x 음수=앞) + 팔꿈치 크게 굽혀 손을 가슴 중앙으로
+  {
+    name: 'gesture',
+    label: '손가슴',
+    ease: 2.5,
+    dt: [
+      [400, 550],
+      [600, 1000],
+      [650, 850],
+    ],
+    vs: {
+      'armL.z': [-1.15, -1.15, -1.3],
+      'armL.x': [-0.55, -0.55, 0],
+      'elbowL.z': [-1.6, -1.7, 0],
+      'head.gz': [0.12, 0.12, 0],
     },
   },
 ];

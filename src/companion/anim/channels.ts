@@ -8,12 +8,17 @@ import * as THREE from 'three'
 
 // 채널 정지값(rest). live 초기값이자 클립 미기록 시 fallback. hold-last로 유지됨
 export const BASELINE: Record<string, number> = {
-  // idle 델타 (0 기준 미세 진동)
+  // idle 머리 델타 (0 기준 미세 진동)
   'head.rotateX': 0,
   'head.rotateY': 0,
   'head.rotateZ': 0,
+  // 제스처 머리 델타 (idle 머리 위에 합성 — base+delta. 끄덕임/기울임/돌리기)
+  'head.gx': 0,
+  'head.gy': 0,
+  'head.gz': 0,
   'chest.inhale': 0,
-  // 제스처 몸통 동작 (Chest y/z 델타 — 호흡 x·포즈 Spine과 다른 축이라 충돌 없음)
+  // 제스처 몸통 동작 (Chest 델타 — 호흡 x에 leanX 가산, y=턴 z=린. 포즈 Spine과 별개 본)
+  'chest.leanX': 0,
   'chest.turnY': 0,
   'chest.leanZ': 0,
   blink: 0,
@@ -62,6 +67,28 @@ export class Channels {
     this.armR = h.getNormalizedBoneNode(VRMHumanBoneName.RightUpperArm)
     this.elbowL = h.getNormalizedBoneNode(VRMHumanBoneName.LeftLowerArm)
     this.elbowR = h.getNormalizedBoneNode(VRMHumanBoneName.RightLowerArm)
+    this.curlFingers()
+  }
+
+  // 전역 편안한 손: 네 손가락 proximal/intermediate를 손바닥쪽으로 살짝 말아둠 (로드 1회).
+  // 손가락은 어떤 클립도 안 건드리므로 한 번 설정하면 유지됨. 좌=음수 z, 우=양수 z (거울상).
+  private curlFingers(): void {
+    const h = this.vrm.humanoid
+    const B = VRMHumanBoneName
+    const curls: [VRMHumanBoneName, number][] = [
+      [B.LeftIndexProximal, -0.2], [B.LeftIndexIntermediate, -0.4],
+      [B.LeftMiddleProximal, -0.2], [B.LeftMiddleIntermediate, -0.4],
+      [B.LeftRingProximal, -0.25], [B.LeftRingIntermediate, -0.45],
+      [B.LeftLittleProximal, -0.3], [B.LeftLittleIntermediate, -0.5],
+      [B.RightIndexProximal, 0.2], [B.RightIndexIntermediate, 0.4],
+      [B.RightMiddleProximal, 0.2], [B.RightMiddleIntermediate, 0.4],
+      [B.RightRingProximal, 0.25], [B.RightRingIntermediate, 0.45],
+      [B.RightLittleProximal, 0.3], [B.RightLittleIntermediate, 0.5],
+    ]
+    for (const [name, z] of curls) {
+      const node = h.getNormalizedBoneNode(name)
+      if (node) node.rotation.z = z
+    }
   }
 
   // 스케줄러 출력 상태맵을 VRM에 기록
@@ -69,7 +96,12 @@ export class Channels {
     const v = (k: string) => state[k] ?? BASELINE[k] ?? 0
 
     if (this.head) {
-      this._euler.set(v('head.rotateX'), v('head.rotateY'), v('head.rotateZ'))
+      // idle 미동(rotate) + 제스처(g) 합성 — base+delta
+      this._euler.set(
+        v('head.rotateX') + v('head.gx'),
+        v('head.rotateY') + v('head.gy'),
+        v('head.rotateZ') + v('head.gz'),
+      )
       this.head.quaternion.setFromEuler(this._euler)
     }
     if (this.spine) {
@@ -77,8 +109,12 @@ export class Channels {
       this.spine.quaternion.setFromEuler(this._euler)
     }
     if (this.chest && this.chest !== this.spine) {
-      // x=호흡, y=제스처 턴, z=제스처 린 — 한 본에 합성
-      this._euler.set(v('chest.inhale') * CHEST_INHALE_SCALE, v('chest.turnY'), v('chest.leanZ'))
+      // x=호흡+제스처린(앞뒤), y=제스처턴, z=제스처린(좌우) — 한 본에 합성
+      this._euler.set(
+        v('chest.inhale') * CHEST_INHALE_SCALE + v('chest.leanX'),
+        v('chest.turnY'),
+        v('chest.leanZ'),
+      )
       this.chest.quaternion.setFromEuler(this._euler)
     }
     if (this.armL) {

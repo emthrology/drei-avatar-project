@@ -30,8 +30,8 @@ export default function App() {
 
   return (
     <div className="flex w-full h-full bg-gray-950 relative">
-      {/* 모드 전환 툴바 */}
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5">
+      {/* 모드 전환 툴바 — DebugPanel(z-9999)보다 위에 둬서 항상 클릭 가능 */}
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[10000] flex items-center gap-2 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5">
         <button
           onClick={() => setMode('editor')}
           className={`text-xs px-3 py-1 rounded transition-colors ${
