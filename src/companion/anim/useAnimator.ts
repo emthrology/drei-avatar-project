@@ -17,6 +17,9 @@ export function useAnimator(
   const schedulerRef = useRef<AnimScheduler | null>(null)
   const channelsRef = useRef<Channels | null>(null)
   const builtVrmRef = useRef<VRM | null>(null)
+  const prevStateRef = useRef<StateName>('idle')
+
+  const GESTURE_PROB = 0.6 // 발화당 제스처 발동 확률
 
   useFrame((_, delta) => {
     const vrm = vrmRef.current
@@ -32,7 +35,22 @@ export function useAnimator(
     }
 
     const scheduler = schedulerRef.current!
-    scheduler.stateName = stateRef.current ?? 'idle'
+    const curState = stateRef.current ?? 'idle'
+    scheduler.stateName = curState
+
+    // idle→speaking 전환 시 세트에서 1개 랜덤 제스처 발동 (확률 + 중복 방지)
+    const gestures = MOODS.neutral.gestures
+    if (
+      curState === 'speaking' &&
+      prevStateRef.current !== 'speaking' &&
+      gestures.length > 0 &&
+      !scheduler.has('gesture') &&
+      Math.random() < GESTURE_PROB
+    ) {
+      const g = gestures[Math.floor(Math.random() * gestures.length)]
+      scheduler.add(g, false)
+    }
+    prevStateRef.current = curState
 
     const state = scheduler.tick(delta * 1000) // 초 → ms
     channelsRef.current!.apply(state)

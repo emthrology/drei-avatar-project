@@ -10,7 +10,8 @@
 //   vs    : { channel: [v0, v1, ...] }. 각 v 스칼라 또는 gaussian 범위. baseline에 가산
 
 export type Ranged = number | [number, number, number?, number?]
-export type ChannelValues = Record<string, Ranged[]>
+// null = 시작값(live)으로 채움. factory가 선두에 자동 null 추가, 추가로 명시도 가능
+export type ChannelValues = Record<string, (Ranged | null)[]>
 
 export interface AnimTemplate {
   name: string
@@ -19,6 +20,7 @@ export interface AnimTemplate {
   vs?: ChannelValues
   loop?: boolean
   alt?: AltBranch[]
+  ease?: number // 클립 전용 sigmoid 강도 (작을수록 완만). 생략 시 기본(snap)
   // 상태별 서브템플릿 (idle/speaking) — 동적 키라 인덱스 시그니처로 수용
   [state: string]: unknown
 }
@@ -37,6 +39,7 @@ interface Clip {
   ndx: number // 현재 세그먼트 캐시
   loop: boolean
   template: AnimTemplate
+  easing: (t: number) => number // 클립 전용 이징 (기본 또는 ease 지정)
 }
 
 // ── 유틸 ──────────────────────────────────────────────────────────
@@ -84,6 +87,11 @@ export class AnimScheduler {
     this.queue = this.queue.filter((c) => c.name !== name)
   }
 
+  // 해당 이름의 클립이 큐에 있는지 (제스처 중복 발동 방지)
+  has(name: string): boolean {
+    return this.queue.some((c) => c.name === name)
+  }
+
   // 템플릿 → 클립 인스턴스. delay/dt/vs의 gaussian을 이 시점에 1회 롤
   private factory(template: AnimTemplate, loop: boolean): Clip {
     // 상태/alt 계층 하강
@@ -118,13 +126,14 @@ export class AnimScheduler {
     const vs: Record<string, (number | null)[]> = {}
     if (a.vs) {
       for (const [ch, arr] of Object.entries(a.vs)) {
-        vs[ch] = [null, ...arr.map((x) => resolveRanged(x))]
+        vs[ch] = [null, ...arr.map((x) => (x === null ? null : resolveRanged(x)))]
         // 타임스탬프 길이에 맞춰 마지막 값으로 패딩
         while (vs[ch].length < absTs.length) vs[ch].push(vs[ch][vs[ch].length - 1])
       }
     }
 
-    return { name: a.name, ts: absTs, vs, ndx: 0, loop, template }
+    const easing = a.ease !== undefined ? sigmoidFactory(a.ease) : this.easing
+    return { name: a.name, ts: absTs, vs, ndx: 0, loop, template, easing }
   }
 
   // alt 확률 분기 (TalkingHead 동전던지기 방식)
@@ -168,7 +177,7 @@ export class AnimScheduler {
           const start = arr[j] ?? this.live[ch] ?? this.baseline[ch] ?? 0
           const end = arr[j + 1] ?? start
           const span = clip.ts[j + 1] - clip.ts[j]
-          const alpha = span > 0.0001 ? this.easing((this.clock - clip.ts[j]) / span) : 1
+          const alpha = span > 0.0001 ? clip.easing((this.clock - clip.ts[j]) / span) : 1
           val = (1 - alpha) * start + alpha * end
         }
         out[ch] = val
