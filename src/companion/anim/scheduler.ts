@@ -112,12 +112,13 @@ export class AnimScheduler {
     }
     const absTs = ts.map((t) => this.clock + delay + t)
 
-    // 값 구성: [null, baseline+delta, ...]. null은 출력 시 live로 채움
+    // 값 구성: [null, target, ...]. null은 출력 시 live로 채움.
+    // target은 채널의 절대값(포즈) 또는 0 기준 델타(idle). baseline 가산 안 함 —
+    // 무드 baseline 오프셋이 생기면 그때 레이어별로 재도입
     const vs: Record<string, (number | null)[]> = {}
     if (a.vs) {
       for (const [ch, arr] of Object.entries(a.vs)) {
-        const base = this.baseline[ch] ?? 0
-        vs[ch] = [null, ...arr.map((x) => base + resolveRanged(x))]
+        vs[ch] = [null, ...arr.map((x) => resolveRanged(x))]
         // 타임스탬프 길이에 맞춰 마지막 값으로 패딩
         while (vs[ch].length < absTs.length) vs[ch].push(vs[ch][vs[ch].length - 1])
       }

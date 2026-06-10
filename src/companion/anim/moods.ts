@@ -39,6 +39,19 @@ const head: AnimTemplate = {
   },
 }
 
+// 포즈: 3종 상반신 체중이동을 랜덤 전환. Spine만 회전(Head/팔은 FK 계층 상속).
+// delay=현 포즈 유지 시간(6~16초), dt=전환 이징(2초). hold-last로 전환 사이 자세 유지.
+// 각 alt가 spine 전축을 명시 → 미지정 채널 드리프트 방지(결정적 전환)
+const pose: AnimTemplate = {
+  name: 'pose',
+  loop: true,
+  alt: [
+    { name: 'pose', delay: [6000, 16000], dt: [2000], vs: { 'spine.x': [0.0], 'spine.y': [0.05], 'spine.z': [0.045] } },
+    { name: 'pose', delay: [6000, 16000], dt: [2000], vs: { 'spine.x': [0.02], 'spine.y': [-0.06], 'spine.z': [-0.05] } },
+    { name: 'pose', delay: [6000, 16000], dt: [2000], vs: { 'spine.x': [-0.01], 'spine.y': [0.08], 'spine.z': [0.0] } },
+  ],
+}
+
 // 눈깜빡임: 85% 단일 깜빡임, 15% 이중 깜빡임. delay 재롤로 2~8초 랜덤 간격
 const blink: AnimTemplate = {
   name: 'blink',
@@ -68,6 +81,6 @@ export const MOODS: Record<string, Mood> = {
   neutral: {
     // 팔내리기는 baseline(armL.z -1.3 / armR.z 1.3)이 담당 — hold-last로 매 프레임 유지.
     // 별도 settle 클립 불필요 (로드 시 1프레임에 대기 자세 확정)
-    loops: [breathing, head, blink],
+    loops: [breathing, head, pose, blink],
   },
 }

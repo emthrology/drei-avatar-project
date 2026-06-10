@@ -6,14 +6,19 @@
 import { VRM, VRMExpressionPresetName, VRMHumanBoneName } from '@pixiv/three-vrm'
 import * as THREE from 'three'
 
-// 채널 baseline (idle 정지 상태값). 클립이 이 위에 절대값을 덮어씀
+// 채널 정지값(rest). live 초기값이자 클립 미기록 시 fallback. hold-last로 유지됨
 export const BASELINE: Record<string, number> = {
+  // idle 델타 (0 기준 미세 진동)
   'head.rotateX': 0,
   'head.rotateY': 0,
   'head.rotateZ': 0,
   'chest.inhale': 0,
   blink: 0,
-  // 팔내리기: T포즈(0) → 대기(±1.3). 시작 시 settle 클립이 0→baseline 이징
+  // 포즈 (Spine 절대 회전 — 상반신 체중이동. Head/팔은 FK 계층으로 따라옴)
+  'spine.x': 0,
+  'spine.y': 0,
+  'spine.z': 0,
+  // 팔내리기: 대기 자세 ±1.3 (정적 — 포즈는 Spine만 건드리므로 팔은 계층 상속)
   'armL.z': -1.3,
   'armR.z': 1.3,
 }
@@ -24,6 +29,7 @@ const CHEST_INHALE_SCALE = 0.03
 export class Channels {
   private head: THREE.Object3D | null
   private chest: THREE.Object3D | null
+  private spine: THREE.Object3D | null
   private armL: THREE.Object3D | null
   private armR: THREE.Object3D | null
   private _euler = new THREE.Euler()
@@ -31,9 +37,11 @@ export class Channels {
   constructor(private vrm: VRM) {
     const h = vrm.humanoid
     this.head = h.getNormalizedBoneNode(VRMHumanBoneName.Head)
+    // 호흡(Chest)과 포즈(Spine)는 다른 본 → 충돌 없음. Chest 없으면 호흡이 Spine로 fallback
     this.chest =
       h.getNormalizedBoneNode(VRMHumanBoneName.Chest) ??
       h.getNormalizedBoneNode(VRMHumanBoneName.Spine)
+    this.spine = h.getNormalizedBoneNode(VRMHumanBoneName.Spine)
     this.armL = h.getNormalizedBoneNode(VRMHumanBoneName.LeftUpperArm)
     this.armR = h.getNormalizedBoneNode(VRMHumanBoneName.RightUpperArm)
   }
@@ -46,7 +54,11 @@ export class Channels {
       this._euler.set(v('head.rotateX'), v('head.rotateY'), v('head.rotateZ'))
       this.head.quaternion.setFromEuler(this._euler)
     }
-    if (this.chest) {
+    if (this.spine) {
+      this._euler.set(v('spine.x'), v('spine.y'), v('spine.z'))
+      this.spine.quaternion.setFromEuler(this._euler)
+    }
+    if (this.chest && this.chest !== this.spine) {
       this._euler.set(v('chest.inhale') * CHEST_INHALE_SCALE, 0, 0)
       this.chest.quaternion.setFromEuler(this._euler)
     }
