@@ -297,16 +297,211 @@ const GESTURES: AnimTemplate[] = [
   },
 ];
 
+// ── 무드별 제스처 톤 ─────────────────────────────────────
+// neutral은 위 GESTURES 10종. 나머지 무드는 톤을 달리한 curated 세트.
+//   happy=경쾌(ease↓·진폭↑·빠름) / sad=느림·처짐(ease↑·고개 숙임) /
+//   surprised=빠른 움찔·물러서기 / angry=날카로움·다가섬
+
+const HAPPY_GESTURES: AnimTemplate[] = [
+  {
+    name: 'gesture',
+    label: 'happy-양손번쩍',
+    ease: 1.8,
+    dt: [
+      [200, 300],
+      [200, 350],
+      [450, 600],
+    ],
+    vs: {
+      'armL.z': [-0.95, -0.95, -1.3],
+      'armR.z': [0.95, 0.95, 1.3],
+      'elbowL.z': [-0.3, -0.3, 0],
+      'elbowR.z': [0.3, 0.3, 0],
+      'chest.leanX': [0.06, 0.06, 0],
+      'head.gx': [-0.05, -0.05, 0], // 살짝 위로 (들뜬 느낌)
+    },
+  },
+  {
+    name: 'gesture',
+    label: 'happy-끄덕끄덕',
+    ease: 1.8,
+    dt: [
+      [150, 220],
+      [120, 250],
+      [350, 480],
+    ],
+    vs: {
+      'head.gx': [0.16, 0.16, 0],
+      'chest.leanX': [0.05, 0.05, 0],
+    },
+  },
+  {
+    name: 'gesture',
+    label: 'happy-손흔들기',
+    ease: 1.8,
+    dt: [
+      [200, 300],
+      [250, 400],
+      [450, 600],
+    ],
+    vs: {
+      'armR.z': [0.85, 0.85, 1.3],
+      'elbowR.z': [0.5, 0.5, 0],
+      'chest.turnY': [-0.06, -0.06, 0],
+    },
+  },
+];
+
+const SAD_GESTURES: AnimTemplate[] = [
+  {
+    name: 'gesture',
+    label: 'sad-고개떨굼',
+    ease: 3.5,
+    dt: [
+      [600, 800],
+      [800, 1400],
+      [800, 1100],
+    ],
+    vs: {
+      'head.gx': [0.22, 0.22, 0], // 고개 숙임
+      'chest.leanX': [-0.05, -0.05, 0],
+      'chest.leanZ': [0.04, 0.04, 0],
+    },
+  },
+  {
+    name: 'gesture',
+    label: 'sad-갸웃처짐',
+    ease: 3.5,
+    dt: [
+      [600, 800],
+      [900, 1500],
+      [800, 1100],
+    ],
+    vs: {
+      'head.gz': [0.18, 0.18, 0],
+      'head.gx': [0.12, 0.12, 0],
+    },
+  },
+];
+
+const SURPRISED_GESTURES: AnimTemplate[] = [
+  {
+    name: 'gesture',
+    label: 'surprised-움찔',
+    ease: 1.5,
+    dt: [
+      [120, 180],
+      [300, 500],
+      [500, 700],
+    ],
+    vs: {
+      'chest.leanX': [-0.1, -0.09, 0], // 뒤로 물러섬
+      'head.gx': [-0.1, -0.08, 0],
+      'armL.z': [-1.05, -1.1, -1.3],
+      'armR.z': [1.05, 1.1, 1.3],
+    },
+  },
+  {
+    name: 'gesture',
+    label: 'surprised-갸웃',
+    ease: 1.6,
+    dt: [
+      [150, 220],
+      [400, 700],
+      [500, 700],
+    ],
+    vs: {
+      'head.gz': [0.2, 0.18, 0],
+      'head.gx': [-0.06, -0.06, 0],
+    },
+  },
+];
+
+const ANGRY_GESTURES: AnimTemplate[] = [
+  {
+    name: 'gesture',
+    label: 'angry-다가섬',
+    ease: 1.5,
+    dt: [
+      [180, 260],
+      [300, 500],
+      [450, 650],
+    ],
+    vs: {
+      'chest.leanX': [0.12, 0.12, 0], // 앞으로 다가섬
+      'head.gx': [0.08, 0.08, 0],
+      'armL.z': [-1.1, -1.1, -1.3],
+      'armR.z': [1.1, 1.1, 1.3],
+      'elbowL.z': [-0.25, -0.25, 0],
+      'elbowR.z': [0.25, 0.25, 0],
+    },
+  },
+  {
+    name: 'gesture',
+    label: 'angry-단호',
+    ease: 1.5,
+    dt: [
+      [150, 220],
+      [200, 350],
+      [400, 550],
+    ],
+    vs: {
+      'head.gx': [0.14, 0.14, 0],
+      'chest.turnY': [0.08, 0.08, 0],
+      'chest.leanZ': [-0.05, -0.05, 0],
+    },
+  },
+];
+
+export type EmotionName = 'happy' | 'angry' | 'sad' | 'relaxed' | 'surprised';
+// 표정 채널 키 (emo. 접두어 제외). preset 5종 + 직접 모프 강조(눈썹/surprised 부위)
+export type ExpressionKey =
+  | EmotionName
+  | 'browAngry'
+  | 'browSorrow'
+  | 'browSurprised'
+  | 'eyeSurprised'
+  | 'mthSurprised';
+
 export interface Mood {
+  expression: Partial<Record<ExpressionKey, number>>; // 무드 표정 (채널 weight)
   loops: AnimTemplate[]; // 무한 루프 클립
   gestures: AnimTemplate[]; // 발화 시작 시 1개 랜덤 발동
 }
+
+// 루프(호흡/머리/포즈/깜빡임)는 모든 무드 공유 — 루프 톤 분기는 5단계(이번 범위 외)
+const BASE_LOOPS: AnimTemplate[] = [breathing, head, pose, blink];
 
 export const MOODS: Record<string, Mood> = {
   neutral: {
     // 팔내리기는 baseline(armL.z -1.3 / armR.z 1.3)이 담당 — hold-last로 매 프레임 유지.
     // 별도 settle 클립 불필요 (로드 시 1프레임에 대기 자세 확정)
-    loops: [breathing, head, pose, blink],
+    expression: {},
+    loops: BASE_LOOPS,
     gestures: GESTURES,
+  },
+  happy: {
+    expression: { happy: 0.9 },
+    loops: BASE_LOOPS,
+    gestures: HAPPY_GESTURES,
+  },
+  sad: {
+    // relaxed(Fcl_ALL_Fun=즐거움) 제거 — 슬픔을 약화시켰음. 눈썹 올림(Sorrow)으로 변별 강화
+    expression: { sad: 0.9, browSorrow: 0.5 },
+    loops: BASE_LOOPS,
+    gestures: SAD_GESTURES,
+  },
+  surprised: {
+    // Fcl_ALL_Surprised(입 크게 벌림) 대신 부위 조합 — 발화 viseme와 과중첩 방지.
+    // 눈썹·눈은 held(놀람 신호 유지). 입은 진입 시 gasp 일회성 입벌림 후 닫힘(useAnimator).
+    expression: { browSurprised: 0.85, eyeSurprised: 0.7 },
+    loops: BASE_LOOPS,
+    gestures: SURPRISED_GESTURES,
+  },
+  angry: {
+    // 눈썹 내림·모음(Angry)으로 sad와 변별 강화
+    expression: { angry: 0.8, browAngry: 0.6 },
+    loops: BASE_LOOPS,
+    gestures: ANGRY_GESTURES,
   },
 };

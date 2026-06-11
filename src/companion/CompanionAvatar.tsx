@@ -8,6 +8,7 @@ import { useAnimator } from './anim/useAnimator'
 import { type StateName } from './anim/scheduler'
 import { useLookAt } from './useLookAt'
 import { type SpeakPayload } from './tts'
+import { type MoodName } from './locales'
 
 export interface CameraSettings {
   position: [number, number, number]
@@ -17,6 +18,7 @@ export interface CameraSettings {
 interface Props {
   url: string
   speaking: boolean
+  mood: MoodName
   onReady: (speak: (payload: SpeakPayload) => void) => void
   onCameraReady?: (s: CameraSettings) => void
 }
@@ -58,10 +60,12 @@ function computeUpperBodyCamera(vrm: VRM): CameraSettings {
   }
 }
 
-export function CompanionAvatar({ url, speaking, onReady, onCameraReady }: Props) {
+export function CompanionAvatar({ url, speaking, mood, onReady, onCameraReady }: Props) {
   const vrmRef = useRef<VRM | null>(null)
   const stateRef = useRef<StateName>('idle')
   stateRef.current = speaking ? 'speaking' : 'idle'
+  const moodRef = useRef<string>('neutral')
+  moodRef.current = mood
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const gltf = useGLTF(url, true, true, (loader: any) => {
@@ -72,7 +76,7 @@ export function CompanionAvatar({ url, speaking, onReady, onCameraReady }: Props
   const vrm: VRM | undefined = (gltf as any).userData?.vrm
 
   const { speak } = useLipsync(vrmRef)
-  useAnimator(vrmRef, stateRef)
+  useAnimator(vrmRef, stateRef, moodRef)
   useLookAt(vrmRef)
 
   useEffect(() => {

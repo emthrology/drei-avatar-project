@@ -1,6 +1,6 @@
 // Google TTS 호출 + word timing 계산
 
-import { type Lang, type Reaction, TTS_CONFIG } from './locales'
+import { type Lang, type Gender, type Reaction, TTS_CONFIG } from './locales'
 
 export interface SpeakPayload {
   audio: AudioBuffer
@@ -20,9 +20,10 @@ function getAudioContext(): AudioContext {
 export async function googleTTS(
   reaction: Reaction,
   lang: Lang,
+  gender: Gender,
   apiKey: string,
 ): Promise<SpeakPayload> {
-  const voice = TTS_CONFIG[lang]
+  const voice = TTS_CONFIG[lang][gender]
   const res = await fetch(
     `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
     {

@@ -4,12 +4,13 @@ import { EditorPanel } from './components/EditorPanel'
 import { CompanionOverlay } from './companion/CompanionOverlay'
 import { DebugPanel } from './companion/DebugPanel'
 import { useAvatarStore } from './store'
-import { type Lang } from './companion/locales'
+import { type Lang, type Gender } from './companion/locales'
 
 export default function App() {
   const { avatarUrl } = useAvatarStore()
   const [mode, setMode] = useState<'editor' | 'companion'>('editor')
   const [lang, setLang] = useState<Lang>('en')
+  const [gender, setGender] = useState<Gender>('male') // 번들 샘플이 남성 → 기본 male
 
   // 컴패니언 모드 디버그 상태
   const [companionStatus, setCompanionStatus] = useState<'loading' | 'ready' | 'speaking'>('loading')
@@ -82,14 +83,17 @@ export default function App() {
             status={companionStatus}
             lastText={lastText}
             lang={lang}
+            gender={gender}
             onEvent={dispatchGameEvent}
             onLangChange={setLang}
+            onGenderChange={setGender}
             onAvatarLoad={handleAvatarLoad}
           />
           <CompanionOverlay
             key={effectiveAvatarUrl}
             avatarUrl={effectiveAvatarUrl}
             lang={lang}
+            gender={gender}
             onStatusChange={setCompanionStatus}
             onSpeak={setLastText}
           />
