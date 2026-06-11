@@ -1,24 +1,34 @@
 import { useRef, useState } from 'react'
-import { type Lang } from './locales'
+import { type Lang, type Gender } from './locales'
 import { MOODS } from './anim/moods'
 
 // 제스처 라벨 목록 (수동 트리거 버튼용). 인덱스가 MOODS.neutral.gestures와 일치
 const GESTURE_LABELS = MOODS.neutral.gestures.map((g, i) => g.label ?? `제스처 ${i}`)
 
+// 무드 목록 (표정 트리거 버튼용). MOODS 키 순서 = neutral/happy/sad/surprised/angry
+const MOOD_NAMES = Object.keys(MOODS)
+
 function triggerGesture(index: number) {
   window.dispatchEvent(new CustomEvent('companion:gesture', { detail: { index } }))
+}
+
+function triggerMood(mood: string) {
+  window.dispatchEvent(new CustomEvent('companion:mood', { detail: { mood } }))
 }
 
 interface Props {
   status: 'loading' | 'ready' | 'speaking'
   lastText: string
   lang: Lang
+  gender: Gender
   onEvent: (type: string) => void
   onLangChange: (lang: Lang) => void
+  onGenderChange: (gender: Gender) => void
   onAvatarLoad: (url: string, label: string) => void
 }
 
 const EVENTS = ['level_clear', 'player_die', 'near_miss', 'jump', 'start'] as const
+const GENDERS: Gender[] = ['male', 'female']
 
 const STATUS_COLOR: Record<Props['status'], string> = {
   loading:  '#f59e0b',
@@ -28,7 +38,7 @@ const STATUS_COLOR: Record<Props['status'], string> = {
 
 const LANGS: Lang[] = ['en', 'ko']
 
-export function DebugPanel({ status, lastText, lang, onEvent, onLangChange, onAvatarLoad }: Props) {
+export function DebugPanel({ status, lastText, lang, gender, onEvent, onLangChange, onGenderChange, onAvatarLoad }: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [loadedLabel, setLoadedLabel] = useState<string | null>(null)
 
@@ -91,6 +101,27 @@ export function DebugPanel({ status, lastText, lang, onEvent, onLangChange, onAv
         ))}
       </div>
 
+      {/* 음성 성별 토글 (VRM에 성별 필드 없음 → 수동 선택) */}
+      <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>Voice</div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+        {GENDERS.map(g => (
+          <button
+            key={g}
+            onClick={() => onGenderChange(g)}
+            style={{
+              background: gender === g ? '#6366f1' : '#1e293b',
+              color: gender === g ? '#fff' : '#94a3b8',
+              border: `1px solid ${gender === g ? '#6366f1' : '#334155'}`,
+              borderRadius: 6, padding: '4px 10px',
+              cursor: 'pointer', fontSize: 11,
+              fontWeight: gender === g ? 'bold' : 'normal',
+            }}
+          >
+            {g === 'male' ? '♂ Male' : '♀ Female'}
+          </button>
+        ))}
+      </div>
+
       <hr style={{ border: 'none', borderTop: '1px solid #333', margin: '8px 0' }} />
 
       {/* VRM 로드 (파이프라인 없이 직접) */}
@@ -124,6 +155,26 @@ export function DebugPanel({ status, lastText, lang, onEvent, onLangChange, onAv
             }}
           >
             {type}
+          </button>
+        ))}
+      </div>
+
+      <hr style={{ border: 'none', borderTop: '1px solid #333', margin: '8px 0' }} />
+
+      {/* 무드(표정) 수동 트리거 — 발화 없이 표정만 검증. neutral로 되돌림 */}
+      <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>Moods (expression)</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {MOOD_NAMES.map(mood => (
+          <button
+            key={mood}
+            onClick={() => triggerMood(mood)}
+            style={{
+              background: '#422006', color: '#fed7aa',
+              border: '1px solid #b45309', borderRadius: 6,
+              padding: '4px 8px', cursor: 'pointer', fontSize: 11,
+            }}
+          >
+            {mood}
           </button>
         ))}
       </div>

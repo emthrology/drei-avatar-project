@@ -4,13 +4,14 @@ import { useThree } from '@react-three/fiber'
 import { useGameEvents } from './useGameEvents'
 import { CompanionAvatar, type CameraSettings } from './CompanionAvatar'
 import { googleTTS, type SpeakPayload } from './tts'
-import { type Lang, type Reaction } from './locales'
+import { type Lang, type Gender, type Reaction, type MoodName } from './locales'
 
 const TTS_API_KEY = import.meta.env.VITE_GOOGLE_TTS_API_KEY
 
 interface Props {
   avatarUrl: string
   lang: Lang
+  gender: Gender
   onStatusChange?: (status: 'loading' | 'ready' | 'speaking') => void
   onSpeak?: (text: string) => void
 }
@@ -25,10 +26,11 @@ function CameraRig({ settings }: { settings: CameraSettings }) {
   return null
 }
 
-export function CompanionOverlay({ avatarUrl, lang, onStatusChange, onSpeak }: Props) {
+export function CompanionOverlay({ avatarUrl, lang, gender, onStatusChange, onSpeak }: Props) {
   const speakRef = useRef<((payload: SpeakPayload) => void) | null>(null)
   const [bubble, setBubble] = useState<string | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'speaking'>('loading')
+  const [mood, setMood] = useState<MoodName>('neutral')
   const [cameraSettings, setCameraSettings] = useState<CameraSettings | null>(null)
 
   function updateStatus(s: 'loading' | 'ready' | 'speaking') {
@@ -42,29 +44,33 @@ export function CompanionOverlay({ avatarUrl, lang, onStatusChange, onSpeak }: P
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onStatusChange])
 
-  const handleReaction = useCallback(async (reaction: Reaction) => {
+  const handleReaction = useCallback(async (reaction: Reaction, nextMood: MoodName) => {
     setBubble(reaction.text)
+    setMood(nextMood)
     updateStatus('speaking')
     onSpeak?.(reaction.text)
 
+    // 발화 종료: 말풍선/상태 정리 + 무드를 neutral로 복귀 (표정 ramp는 useAnimator가 처리)
+    const end = () => {
+      setBubble(null)
+      setMood('neutral')
+      updateStatus('ready')
+    }
+
     if (TTS_API_KEY) {
       try {
-        const payload = await googleTTS(reaction, lang, TTS_API_KEY)
+        const payload = await googleTTS(reaction, lang, gender, TTS_API_KEY)
         speakRef.current?.(payload)
-        setTimeout(() => {
-          setBubble(null)
-          updateStatus('ready')
-        }, payload.audio.duration * 1000 + 500)
+        setTimeout(end, payload.audio.duration * 1000 + 500)
       } catch (e) {
         console.error('TTS failed:', e)
-        setBubble(null)
-        updateStatus('ready')
+        end()
       }
     } else {
-      setTimeout(() => { setBubble(null); updateStatus('ready') }, 5000)
+      setTimeout(end, 5000)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, onStatusChange, onSpeak])
+  }, [lang, gender, onStatusChange, onSpeak])
 
   useGameEvents(handleReaction, lang)
 
@@ -78,7 +84,31 @@ export function CompanionOverlay({ avatarUrl, lang, onStatusChange, onSpeak }: P
       pointerEvents: 'none',
       zIndex: 1000,
     }}>
-      {/* 말풍선 */}
+      <Canvas
+        camera={{ position: [0, 1.4, 2.5], fov: 28 }}
+        gl={{ antialias: true, alpha: true }}
+        style={{ background: 'transparent' }}
+      >
+        <ambientLight intensity={0.6} />
+        <directionalLight position={[0.5, 2, 2]} intensity={2.0} />
+        <directionalLight position={[-1, 1, -2]} intensity={0.4} />
+
+        <Suspense fallback={null}>
+          <CompanionAvatar
+            key={avatarUrl}
+            url={avatarUrl}
+            speaking={status === 'speaking'}
+            mood={mood}
+            onReady={handleReady}
+            onCameraReady={setCameraSettings}
+          />
+        </Suspense>
+
+        {/* VRM 로드 완료 후 본 기반으로 카메라 세팅 적용 */}
+        {cameraSettings && <CameraRig settings={cameraSettings} />}
+      </Canvas>
+
+      {/* 말풍선 — Canvas 위에 올라오도록 Canvas 이후 선언 */}
       {bubble && (
         <div style={{
           position: 'absolute',
@@ -110,29 +140,6 @@ export function CompanionOverlay({ avatarUrl, lang, onStatusChange, onSpeak }: P
       }}>
         {status}
       </div>
-
-      <Canvas
-        camera={{ position: [0, 1.4, 2.5], fov: 28 }}
-        gl={{ antialias: true, alpha: true }}
-        style={{ background: 'transparent' }}
-      >
-        <ambientLight intensity={0.6} />
-        <directionalLight position={[0.5, 2, 2]} intensity={2.0} />
-        <directionalLight position={[-1, 1, -2]} intensity={0.4} />
-
-        <Suspense fallback={null}>
-          <CompanionAvatar
-            key={avatarUrl}
-            url={avatarUrl}
-            speaking={status === 'speaking'}
-            onReady={handleReady}
-            onCameraReady={setCameraSettings}
-          />
-        </Suspense>
-
-        {/* VRM 로드 완료 후 본 기반으로 카메라 세팅 적용 */}
-        {cameraSettings && <CameraRig settings={cameraSettings} />}
-      </Canvas>
     </div>
   )
 }
