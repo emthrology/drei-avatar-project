@@ -30,6 +30,22 @@ export const SHADER_DEFAULTS: ShaderParams = {
   shadingToonyFactor: 0.9,
 }
 
+// 컬러 그레이딩 (포스트프로세싱) — 사진편집 톤 변경. 모델을 안 건드리는 화면 레이어라
+// 머티리얼 기능과 비충돌. 디폴트는 전부 무변화값 → 로드 시 기존 화면 동일 (비퇴행)
+export interface GradingParams {
+  brightness: number  // -1~1 (0=무변화)
+  contrast: number    // -1~1 (0=무변화)
+  hue: number         // -π~π 라디안 (0=무변화)
+  saturation: number  // -1~1 (0=무변화)
+}
+
+export const GRADING_DEFAULTS: GradingParams = {
+  brightness: 0,
+  contrast: 0,
+  hue: 0,
+  saturation: 0,
+}
+
 interface AvatarState {
   avatarUrl: string
   setAvatarUrl: (url: string) => void
@@ -45,6 +61,9 @@ interface AvatarState {
 
   shader: ShaderParams
   setShader: (patch: Partial<ShaderParams>) => void
+
+  grading: GradingParams
+  setGrading: (patch: Partial<GradingParams>) => void
 }
 
 export const useAvatarStore = create<AvatarState>((set) => ({
@@ -56,6 +75,9 @@ export const useAvatarStore = create<AvatarState>((set) => ({
 
   shader: SHADER_DEFAULTS,
   setShader: (patch) => set((s) => ({ shader: { ...s.shader, ...patch } })),
+
+  grading: GRADING_DEFAULTS,
+  setGrading: (patch) => set((s) => ({ grading: { ...s.grading, ...patch } })),
 
   meshInfos: [],
   setMeshInfos: (infos) => set({ meshInfos: infos }),
