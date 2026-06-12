@@ -99,6 +99,21 @@ const pose: AnimTemplate = {
       dt: [[1000, 1800]],
       vs: { 'spine.x': [0.01], 'spine.y': [-0.12], 'spine.z': [0.06] },
     },
+    // 크게 비틀어 둘러보기 (좌/우) — Spine 큰 턴, 머리는 FK 상속. 빈도 ↑ (p 0.15씩=0.30)
+    {
+      name: 'pose',
+      p: 0.15,
+      delay: [3000, 7000],
+      dt: [[1600, 2400]],
+      vs: { 'spine.x': [0.02], 'spine.y': [0.35], 'spine.z': [-0.05] },
+    },
+    {
+      name: 'pose',
+      p: 0.15,
+      delay: [3000, 7000],
+      dt: [[1600, 2400]],
+      vs: { 'spine.x': [0.02], 'spine.y': [-0.35], 'spine.z': [0.05] },
+    },
   ],
 };
 
@@ -121,6 +136,104 @@ const blink: AnimTemplate = {
       vs: { blink: [1, 1, 0, 0, 1, 1, 0] },
     },
   ],
+};
+
+// ── idle 팔 포즈 (FK) ──────────────────────────────────────
+// 차렷 고정이던 팔에 생활감 부여. armPose 루프가 idle 중 랜덤 전환(대부분 차렷+미세이동,
+// 가끔 허리짚기/뒷짐). 발화 중(speaking)엔 rest로 양보 → 제스처가 팔 채널 소유(큐 후순위 승).
+// 손끝 정밀도는 작은 오버레이서 안 보여 FK 근사로 충분(손가슴과 동일). 검증축: arm.z(들기),
+// arm.x(±=앞뒤, 음수=앞), elbow.z(굽힘 좌− / 우+). 각 포즈는 양팔 전 채널 명시(잔상 방지).
+//
+// 디버그 버튼용으로 export — DebugPanel이 label로 트리거(companion:idlepose).
+export const IDLE_ARM_POSES: AnimTemplate[] = [
+  {
+    name: 'armPose',
+    label: '허리짚기L',
+    p: 0.05, // 빈도 낮춤 (가끔만)
+    ease: 2.8,
+    delay: [4000, 9000],
+    dt: [[800, 1300]],
+    vs: {
+      'armL.z': [-1.02],
+      'armL.x': [-0.12],
+      'elbowL.z': [-1.05],
+      'armR.z': [1.3],
+      'armR.x': [0],
+      'elbowR.z': [0],
+    },
+  },
+  {
+    name: 'armPose',
+    label: '허리짚기R',
+    p: 0.05, // 빈도 낮춤 (가끔만)
+    ease: 2.8,
+    delay: [4000, 9000],
+    dt: [[800, 1300]],
+    vs: {
+      'armR.z': [1.02],
+      'armR.x': [-0.12],
+      'elbowR.z': [1.05],
+      'armL.z': [-1.3],
+      'armL.x': [0],
+      'elbowL.z': [0],
+    },
+  },
+  {
+    name: 'armPose',
+    label: '뒷짐',
+    ease: 2.8,
+    delay: [4500, 9500],
+    dt: [[900, 1400]],
+    vs: {
+      'armL.x': [0.26],
+      'armR.x': [0.26],
+      'elbowL.z': [-0.5],
+      'elbowR.z': [0.5],
+      'armL.z': [-1.28],
+      'armR.z': [1.28],
+    },
+  },
+];
+
+// 차렷+미세 무게이동 (높은 확률, 길게 유지) — armL/R.z 작은 gaussian으로 상시 미동
+const armRelaxed: AnimTemplate = {
+  name: 'armPose',
+  p: 0.72, // 차렷+미세이동 비중 ↑ (허리짚기 빈도 낮춤). 나머지: 허리짚기L/R 0.05, 뒷짐 ~0.18
+  ease: 3,
+  delay: [3000, 7000],
+  dt: [[1400, 2200]],
+  vs: {
+    'armL.z': [[-1.33, -1.27]],
+    'armR.z': [[1.27, 1.33]],
+    'armL.x': [[-0.03, 0.03]],
+    'armR.x': [[-0.03, 0.03]],
+    'elbowL.z': [[-0.08, 0.02]],
+    'elbowR.z': [[-0.02, 0.08]],
+  },
+};
+
+// armPose 루프: idle은 차렷/포즈 랜덤 전환, speaking은 rest(제스처에 팔 양보)
+const armPose: AnimTemplate = {
+  name: 'armPose',
+  loop: true,
+  idle: {
+    name: 'armPose',
+    alt: [armRelaxed, ...IDLE_ARM_POSES],
+  },
+  speaking: {
+    name: 'armPose',
+    ease: 3,
+    delay: [1500, 3000],
+    dt: [[600, 1000]],
+    vs: {
+      'armL.z': [-1.3],
+      'armR.z': [1.3],
+      'armL.x': [0],
+      'armR.x': [0],
+      'elbowL.z': [0],
+      'elbowR.z': [0],
+    },
+  },
 };
 
 // 제스처 세트: 발화 시작 시 1개 랜덤 발동(루프 아님). 각 제스처는 독립 템플릿.
@@ -470,7 +583,7 @@ export interface Mood {
 }
 
 // 루프(호흡/머리/포즈/깜빡임)는 모든 무드 공유 — 루프 톤 분기는 5단계(이번 범위 외)
-const BASE_LOOPS: AnimTemplate[] = [breathing, head, pose, blink];
+const BASE_LOOPS: AnimTemplate[] = [breathing, head, pose, armPose, blink];
 
 export const MOODS: Record<string, Mood> = {
   neutral: {
