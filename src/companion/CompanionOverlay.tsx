@@ -5,6 +5,7 @@ import { useGameEvents } from './useGameEvents'
 import { CompanionAvatar, type CameraSettings } from './CompanionAvatar'
 import { googleTTS, type SpeakPayload } from './tts'
 import { type Lang, type Gender, type Reaction, type MoodName } from './locales'
+import { SceneLights } from '../components/SceneLights'
 
 const TTS_API_KEY = import.meta.env.VITE_GOOGLE_TTS_API_KEY
 
@@ -89,9 +90,8 @@ export function CompanionOverlay({ avatarUrl, lang, gender, onStatusChange, onSp
         gl={{ antialias: true, alpha: true }}
         style={{ background: 'transparent' }}
       >
-        <ambientLight intensity={0.6} />
-        <directionalLight position={[0.5, 2, 2]} intensity={2.0} />
-        <directionalLight position={[-1, 1, -2]} intensity={0.4} />
+        {/* 에디터와 공유 조명 (store.lighting) — 에디터에서 조절하면 컴패니언도 반영 */}
+        <SceneLights />
 
         <Suspense fallback={null}>
           <CompanionAvatar
