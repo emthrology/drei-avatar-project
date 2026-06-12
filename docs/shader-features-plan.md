@@ -1,57 +1,79 @@
-# 셰이더 보조기능 추가 계획
+# 톤/컬러 그레이딩 계획 (구 셰이더 보조기능)
 
-## 배경
+> **방향 전환됨 (2026-06-12).** 원래 이 문서는 emission/outline색/shadingShift 같은 **MToon 머티리얼별 튜닝**을 계획했으나, 사용자 관점에서 필요성이 약하고(원칙2 미달) 일부는 기존 렌더를 훼손(원칙1 위반)함이 검증됨. → **사진편집 스타일 톤 변경 = 포스트프로세싱 컬러 그레이딩**으로 전환. 폐기된 항목은 하단 "폐기 기록"에 근거와 함께 보존.
 
-Rim(림 라이트)은 MToon의 **핵심이 아니라 액세서리**다. 컴패니언 300×400 오버레이 + 어두운 의상에선 거의 인지 불가라, 에디터에서 **제거**한다. 대신 체감 큰 보조기능을 추가한다.
+## 개발 원칙 (이 문서 전체에 적용)
 
-핵심 우선순위(이 프로젝트 기준):
-1. 외곽선 굵기 (실루엣 인상)
-2. 툰 경계 선명도 + shade 색 (셀 룩)
-3. ~~Rim~~ (제거)
+1. **비퇴행** — 신기능이 기존 동작 feature를 저해하면 안 됨
+2. **실질 개선** — "개발만 하면 됨" 금지, 체감되는 개선이어야 함
 
-## 확정 범위
+## 왜 컬러 그레이딩인가
 
-emission + outline 색상 + shadingShift
+"사진편집창의 톤 변경"(밝기/대비/채도/색조)은 three.js에서 **포스트프로세싱**(렌더된 화면에 입히는 풀스크린 패스) 영역. 두 원칙에 정확히 부합:
 
-## 현황 (이미 있는 것)
+- **원칙1**: 화면 레이어라 **모델 머티리얼을 전혀 안 건드림** → 기존 렌더 0% 훼손
+- **원칙2**: 밝기/대비/채도/색조는 슬라이더당 **즉시 명확히 보임** (rim/shadingShift 같은 미묘함 없음)
 
-- **litColor / shadeColor**: 이미 **파츠별**로 동작 ([EditorPanel](../src/components/EditorPanel.tsx) 색상 섹션 → `meshInfos` → [VRMAvatar](../src/components/VRMAvatar.tsx) 적용). 신규 아님
-- **outlineWidth / shadingToony**: 전역 ([ShaderPanel](../src/components/ShaderPanel.tsx))
+## 효과 ↔ 사진편집 대응
 
-## 두 적용 구조
+| 효과 (`@react-three/postprocessing`) | 사진편집 대응 | 우선 |
+|---|---|---|
+| `BrightnessContrast` | 밝기 / 대비 | ★ 1차 |
+| `HueSaturation` | 색조 / 채도 | ★ 1차 |
+| `ToneMapping` | 노출/필름 룩 | 선택 |
+| `Vignette` | 비네팅 | 선택 |
 
-- **파츠별 (meshInfos)**: 파츠 선택 → 그 파츠만. lit/shade가 이 방식. **emission 적합** (눈만 빛나게 등)
-- **전역 (ShaderPanel)**: 모든 MToon 일괄. outline 굵기/toony가 이 방식. **outline 색상·shadingShift 적합**
+## 버전 제약 (확인 완료)
 
-## 단계
+- 이 프로젝트는 **R3F v8 기차**(React 18 → R3F v8 → drei v9). [docs/concepts.md]나 CLAUDE.md 스택 참조.
+- `@react-three/postprocessing` **최신 v3는 R3F v9(React 19) 요구** → 안 맞음
+- **`@react-three/postprocessing@2.17.0`이 R3F v8 호환** (`peer @react-three/fiber ^8.0`) → 이 버전 핀
+- React/R3F 업그레이드 불필요 — 기차 A 안에서 해결
 
-### 1단계 — Rim 제거 ✅ (선행 완료)
-- `store.ts` ShaderParams에서 rim 4종(rimMix/rimColor/rimFresnelPower/rimLift) 제거
-- ShaderPanel에서 rim 슬라이더·색상 제거
+## 적용 구조
 
-### 2단계 — 파츠별 Emission
-- `MeshInfo`에 `emissionColor: string` + `emissionIntensity: number` 추가
-- `collectMeshInfos`: `m.emissive`(색) + `m.emissiveIntensity`(강도) 읽어 초기화 → 로드 시 외형 유지
-- meshInfos 적용 effect: `m.emissive.setStyle(...)`, `m.emissiveIntensity = ...`
-- 색상 섹션 UI: emission 색 피커 + 강도 슬라이더 (0~5 정도)
+전역 그레이딩이지만 **모델을 안 건드리므로** lit/shade(파츠별)와 충돌 없음. 별개 레이어로 공존.
 
-### 3단계 — 전역 Outline 색상
-- ShaderParams에 `outlineColor: string` 추가
-- ShaderPanel에 색 피커 → `m.outlineColorFactor.setStyle(...)`
-- 디폴트: 모델 outlineColorFactor가 대부분 `[0,0,0]`(검정) → **검정** 디폴트 (피부만 어두운 빨강 `[0.061,0.0086,0.014]`). 검정으로 통일돼도 자연스러움
+- 상태: `store.ts`에 `grading: { brightness, contrast, hue, saturation }` 추가 (전부 숫자 → store 안전, 모드 전환 유지). 디폴트는 **무변화값**(brightness 0, contrast 0, hue 0, saturation 0)이라 로드 시 기존 화면과 동일 → 원칙1 보장
+- 적용: `<EffectComposer>` + `<BrightnessContrast>` + `<HueSaturation>`를 Canvas 안에 배치, store 값 바인딩
+- UI: 에디터에 `GradingPanel`(SliderRow 재사용)
 
-### 4단계 — shadingShift (전역)
-- ShaderParams에 `shadingShift: number` (-1~1) 추가
-- ShaderPanel 슬라이더 → `m.shadingShiftFactor`
-- 효과: 빛/그늘 경계 **위치** 이동 → 정면에서도 toony 경계 드러냄
-- 주의: 모델 기본값이 파츠마다 다름(face 0.9, body -0.05 등). 전역 덮어쓰기라 로드 시 음영 살짝 바뀜 (기존 toony 전역 덮어쓰기와 동일한 성격)
+## 단계 (점진)
 
-## 열린 이슈 (구현 시 검증)
+### 1단계 — docs 개정 ✅ (이 문서)
+방향 전환 기록 + 폐기 근거 보존
 
-- **emission ↔ emissive 텍스처**: 모델 `emissiveFactor=[1,1,1]`인데 안 빛남 → emissive 텍스처(검정)나 `KHR_materials_emissive_strength=0`이 변조 중일 가능성. 텍스처가 검정이면 색/강도 factor를 키워도 `factor × 텍스처(0) = 0`이라 **변화 없을 수 있음**. 파츠별로 다를 수 있으니, emission 슬라이더가 실제 보이는지 파츠별 확인 필요. 안 보이면 emissiveMap 무시 옵션 검토
-- **전역 덮어쓰기 성격**: outlineColor/shadingShift는 전역이라 로드 시 모델 per-material 값을 덮음 (outlineWidth/toony도 동일). 파츠별 보존이 필요하면 meshInfos로 이동 고려
+### 2단계 — 의존성 + store
+- `npm i @react-three/postprocessing@2.17.0`
+- `store.ts`에 `GradingParams` + `GRADING_DEFAULTS`(무변화) + `setGrading` 추가
 
-## 비고
+### 3단계 — 에디터 적용 (먼저, 안전)
+- `AvatarScene`(불투명 배경 #1a1a2e)에 `<EffectComposer>` 추가 → **투명도 이슈 없음**
+- `GradingPanel` 슬라이더 → 즉시 톤 변화 확인
+- 빌드/육안 검증
 
-- MToon 프로퍼티명: `m.emissive`(Color)·`m.emissiveIntensity`·`m.outlineColorFactor`(Color)·`m.shadingShiftFactor`(number)
-- 색 변경은 needsUpdate 불필요(uniform), 단 일관성 위해 기존 코드 따름
+### 4단계 — 컴패니언 확장 (검증 후)
+- 컴패니언 Canvas는 **투명 배경(`alpha:true`)** → EffectComposer가 알파를 깨뜨릴 수 있음. 알파 통과(`<EffectComposer>` 알파 처리 + 효과별 blend) 검증 필요
+- 풀스크린 패스 = 게임 위 오버레이엔 비용 → 검증 후 판단 ([docs/drei-opportunities.md]의 성능 자동조절과 연계 가능)
+- 안 되면 **에디터 전용으로 확정**(원칙2: 억지로 넣지 않음)
+
+## 폐기 기록 — MToon 머티리얼별 튜닝 (male_sample.vrm 파싱 검증)
+
+원칙1·2로 판정해 **전부 폐기**. 근거 데이터:
+
+### Emission — 컷 (원칙1·2 모두 위반)
+- 6개 머티리얼 전부 `emissiveFactor=[1,1,1]` + 별도 emissive 텍스처(1024², **13.8KB=사실상 검정**)
+- MToon은 `emissive × emissiveMap`이라 텍스처 검정이면 factor 키워도 **0** → 그냥은 안 보임
+- 보이게 하려면 `emissiveMap=null`로 모델 텍스처 제거(원칙1 위반) → 그래도 **파츠 균일 단색 발광**뿐(눈만 빛나기 불가, 얼굴/눈 emissive 셋업 공유)
+- 이 모델엔 발광 액센트 없음 → 가치 없음(원칙2)
+
+### Outline 색 — 컷 (전역은 원칙1 위반, 파츠별로도 가치 약함)
+- outline색이 **파츠별로 다름**: 얼굴/입/눈 검정, 피부 어두운 빨강 `[0.061,0.009,0.014]`, **머리카락 청록 `[0.157,0.408,0.35]`**
+- 전역 덮어쓰기면 머리카락 청록 외곽선 파괴(원칙1). 파츠별로 하면 비파괴지만 사용자 필요성 낮음(원칙2)
+
+### shadingShift — 컷 (전역은 원칙1 위반, 정면 작은 뷰서 미묘)
+- 파츠별 편차 큼: face 0.9 / eye 0.23 / body -0.05 / hair -0.2 / tops -0.35
+- 전역 덮어쓰기면 음영 뭉갬(원칙1). 효과 자체도 정면 작은 뷰서 미묘(원칙2)
+
+### 참고: 기존 전역 toony/outlineWidth의 잠재 퇴행
+- 현재 [ShaderPanel](../src/components/ShaderPanel.tsx)의 전역 `toony=0.9` 디폴트가 로드 시 모든 머티리얼에 덮어써서 tops(0.35)·hair(0.8) authored 값을 뭉갬 = 약한 원칙1 위반(기존 동작). 컬러 그레이딩과 무관하나, 추후 정리 시 "실제값 디폴트 읽기"로 교정 가능
