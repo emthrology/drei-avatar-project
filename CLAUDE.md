@@ -25,6 +25,7 @@ VRoid VRM 아바타를 불러와 MToon 셰이더로 파츠/색상을 실시간 �
 
 **Vite 필수** — R3F 생태계 표준, CRA 사용 금지.
 **Three.js v0.170.x** — @pixiv/three-vrm 3.x 호환 버전.
+**R3F v8 train 고정** — React 18 → @react-three/fiber v8 → drei v9. v9(React 19)로 안 올림(이득 없음, three-vrm은 양쪽 호환). 포스트프로세싱도 v8 호환 `@react-three/postprocessing@2.17` 핀. 상세 [docs/shader-features-plan.md](docs/shader-features-plan.md).
 
 ## 현재 프로젝트 구조
 
@@ -35,10 +36,14 @@ drei-avatar-project/
 │       └── male_sample.vrm   # 12MB VRoid 샘플 아바타
 ├── src/
 │   ├── components/
-│   │   ├── AvatarScene.tsx   # Canvas + Lights + OrbitControls
+│   │   ├── AvatarScene.tsx   # Canvas + SceneLights + GradingEffects + OrbitControls
 │   │   ├── VRMAvatar.tsx     # VRM 로딩, MToon 파라미터 적용, 프레임 업데이트
-│   │   ├── EditorPanel.tsx   # 에디터 우측 패널 (탭: 파츠/셰이더/애니메이션)
-│   │   ├── ShaderPanel.tsx   # MToon 파라미터 슬라이더 (module singleton 방식)
+│   │   ├── SceneLights.tsx   # 에디터·컴패니언 공유 조명 (store.lighting 단일 소스)
+│   │   ├── GradingEffects.tsx# 컬러 그레이딩 포스트프로세싱 (EffectComposer, store.grading)
+│   │   ├── EditorPanel.tsx   # 에디터 우측 패널 (파츠/색상/셰이더/조명/톤/애니메이션)
+│   │   ├── ShaderPanel.tsx   # MToon: 외곽선 굵기 + 툰 경계 (rim 제거됨, module singleton)
+│   │   ├── LightPanel.tsx    # 조명 슬라이더 (환경광/메인광 강도·각도)
+│   │   ├── GradingPanel.tsx  # 톤 슬라이더 (밝기/대비/색조/채도)
 │   │   └── AnimationPanel.tsx# 내장 애니메이션 클립 목록 + 재생
 │   ├── companion/
 │   │   ├── CompanionOverlay.tsx  # fixed 오버레이 (300×400, bottom-right)
@@ -51,12 +56,12 @@ drei-avatar-project/
 │   │   ├── anim/                 # ── 절차 애니메이션 스케줄러 (B/C/E) ──
 │   │   │   ├── scheduler.ts      #   animFactory + tick(clock 보간) + gaussian + 클립별 ease
 │   │   │   ├── channels.ts       #   논리 채널 → VRM 본/표정. baseline(rest) 정의
-│   │   │   ├── moods.ts          #   neutral 무드: 루프(호흡/머리/포즈/깜빡임) + 제스처 6종
-│   │   │   └── useAnimator.ts    #   R3F 훅. 발화 전환 시 랜덤 제스처 트리거
+│   │   │   ├── moods.ts          #   무드 5종: 루프(호흡/머리/포즈/armPose팔/깜빡임) + 제스처 10종
+│   │   │   └── useAnimator.ts    #   R3F 훅. 발화 전환 시 랜덤 제스처 + idle 팔 포즈 트리거
 │   │   ├── useGameEvents.ts      # window game:event 수신
 │   │   ├── tts.ts                # Google TTS REST API → AudioBuffer + word timing
 │   │   └── locales.ts            # ko/en 반응 대사 + TTS_CONFIG
-│   ├── store.ts              # Zustand: avatarUrl, meshInfos (visible/litColor/shadeColor)
+│   ├── store.ts              # Zustand: avatarUrl, meshInfos, lighting, shader, grading
 │   ├── vite-env.d.ts         # VITE_GOOGLE_TTS_API_KEY 타입 선언
 │   └── App.tsx               # 에디터/컴패니언 모드 전환
 ├── .env                      # VITE_GOOGLE_TTS_API_KEY (선택)
@@ -100,11 +105,12 @@ let _vrmScene: THREE.Object3D | null = null
 export function setShaderPanelScene(scene) { _vrmScene = scene }
 ```
 
-조작 가능한 파라미터:
+조작 가능한 파라미터 (전역):
 - `outlineWidthFactor` — 외곽선 두께 (0~0.02)
-- `rimLightingMixFactor` — 림 라이트 강도 (0~1)
-- `rimColorFactor` — 림 라이트 색상 (THREE.Color)
-- `shadingToonyFactor` — 툰 셰이딩 강도 (0~1, 높을수록 명확한 경계)
+- `shadingToonyFactor` — 툰 경계 선명도 (0~1, 높을수록 명확한 경계)
+
+**rim 계열 제거됨** — MToon 핵심 아님 + 작은 오버레이서 인지 불가. emission/outline색/shadingShift도 모델 파싱 검증 후 폐기(원칙1·2 미달). 근거 [docs/shader-features-plan.md](docs/shader-features-plan.md).
+**조명·톤은 별도 레이어**: 조명=LightPanel/SceneLights(`store.lighting`), 사진편집식 톤=컬러 그레이딩 포스트프로세싱(GradingPanel/GradingEffects, `store.grading` — 모델 비훼손 화면 레이어).
 
 ## 컴패니언 모드
 
@@ -117,11 +123,13 @@ window.dispatchEvent(new CustomEvent('game:event', {
 }))
 ```
 
-### 아이들 애니메이션 (useIdleAnimation.ts)
-- 팔 내리기: T포즈 → UpperArm Z ±1.3rad로 slerp(0.08) — 로드 후 ~1초에 걸쳐 대기 포즈 정착
-- 숨쉬기: chest bone quaternion slerp `sin(time * 0.8) * 0.015`
-- 머리 미세 움직임: 좌우 0.27Hz ±0.04rad + 끄덕 0.53Hz ±0.02rad, slerp(0.05)
-- 눈깜빡임: open → closing(70ms) → opening(100ms) → open(2~5s 랜덤)
+### 아이들 애니메이션 (anim/ 스케줄러 — 옛 useIdleAnimation 대체됨)
+선언적 루프 템플릿([moods.ts](src/companion/anim/moods.ts) BASE_LOOPS):
+- 호흡(`chest.inhale`) / 머리 미동(`head.rotate*`, 가끔 둘러보기) / 눈깜빡임
+- 포즈(`spine.*` 체중이동 + 둘러보기 alt) — Head/팔 FK 상속
+- **armPose 팔**: 차렷+미세이동 / 허리짚기 / 뒷짐. 발화 시 rest로 양보(제스처가 팔 소유). 상세 [docs/idle-arm-plan.md](docs/idle-arm-plan.md)
+
+옛 useIdleAnimation(slerp 기반)은 폐기 — 위 선언적 스케줄러로 흡수.
 
 ### 립싱크 (useLipsync.ts)
 - word timing → VRM `expressionManager` viseme 매핑
@@ -178,6 +186,9 @@ VRM 로드 흐름: 파일 선택 → `URL.createObjectURL(file)` → `setCompani
 - [x] **무드 시스템 확장 1~4단계 완료** — 무드 5종(neutral/happy/sad/surprised/angry). 게임 이벤트별 표정 전환(`emo.*` 채널→preset emotion) + 무드별 제스처 톤. 발화 후 neutral decay. DebugPanel 무드/표정 버튼. (5단계 루프 톤 `moodName` 분기는 미착수)
 - [x] **무드 변별/품질 폴리싱** — sad/angry는 눈썹 부위 모프(`Fcl_BRW_*`) 강조로 구분. surprised는 입벌림 gasp 일회성(발화 viseme와 분리). 표정↔립싱크 입 충돌 검증(가산·비파괴 확인)
 - [x] **TTS 성별 음성 선택** — VRM에 성별 필드 없음 → 에디터에서 수동 선택(`Gender` 토글). `TTS_CONFIG`를 lang×gender로 확장
+- [x] **에디터 조명 컨트롤 + 공유 SceneLights** — `store.lighting`로 에디터/컴패니언 조명 공유, LightPanel 슬라이더(환경광/메인광 강도·각도). rim 제거
+- [x] **컬러 그레이딩 (포스트프로세싱)** — 사진편집식 톤(밝기/대비/색조/채도). EffectComposer 화면 레이어(모델 비훼손), 에디터·컴패니언 `store.grading` 공유. emission/outline색/shadingShift는 모델 검증 후 폐기 ([docs/shader-features-plan.md](docs/shader-features-plan.md), [docs/drei-opportunities.md](docs/drei-opportunities.md))
+- [x] **idle 자연스러운 팔 동작 (FK)** — armPose 루프(허리짚기/뒷짐/미세 무게이동) + 몸통 둘러보기. IK는 보류 ([docs/idle-arm-plan.md](docs/idle-arm-plan.md))
 - [ ] **후속: 무드 5단계 — 루프 톤 분기** — happy=활발한 머리/호흡, sad=느린 미동. 스케줄러 factory에 `moodName` 분기 추가 필요 (현재 루프는 전 무드 공유)
 - [ ] **후속: IK 도입** — 손이 보이는 제스처(손가슴 등) 정밀화. CCDIKSolver 채널 추상화. 상세 [docs/ik-plan.md](docs/ik-plan.md)
 - [ ] Phase 4: 애니메이션 미리보기 (내장 클립 재생), 스크린샷/내보내기
@@ -229,10 +240,11 @@ VRM preset은 입 모양 5개(aa/ih/ou/ee/oh)지만, VRoid 모델의 추가 입 
 
 ## 주의사항
 
+- **개발 원칙** (신기능 시 준수): ①비퇴행 — 기존 동작 feature를 저해 금지. ②실질 개선 — "개발만 하면 됨" 금지, 체감되는 개선이어야. (rim·emission 컷, 그레이딩 화면 레이어 채택이 이 원칙의 사례)
 - VRM CORS → `public/avatars/`에 위치시켜 same-origin 서빙
 - Three.js v0.170.x 고정 — drei v9, @pixiv/three-vrm v3 호환
 - Zustand에 Three.js 객체(VRM, Object3D) 절대 넣지 말 것 → module singleton 사용
-- `vrm.update(delta)` 매 프레임 필수 — time uniform 없으면 rim light 등 정지
+- `vrm.update(delta)` 매 프레임 필수 — 없으면 springBone 물리(머리카락/옷)·lookAt·표정 정지
 - KTX2Loader 타입 충돌 (drei three-stdlib vs @types/three) → `loader`, `parser` `any` 캐스트
 - VRM 파츠는 Face_(merged), Body_(merged) 등 통합 메시 → 진정한 파츠 교체는 VRoid에서 별도 내보내기 필요
 
@@ -249,3 +261,5 @@ VRM preset은 입 모양 5개(aa/ih/ou/ee/oh)지만, VRoid 모델의 추가 입 
 - **이징**: 짧은 동작(제스처)은 `ease: 2.5~3.5`(완만), 기본(snap)은 blink/idle용. 각진 로봇 느낌은 ease 낮춰 해결
 - **lookAt rangeMap**: VRoid 기본 inputMax 90은 정면 시선이 거의 0 → `useLookAt`에서 수평만 보정. 수직 보정 시 눈 내리깖(카메라가 가슴 높이라 하향각 포화)
 - **제스처 추가**: `anim/moods.ts` GESTURES 배열에 `{label, ease, dt:[out,hold,back], vs:[out,hold,rest]}` 항목 추가 → DebugPanel 버튼 자동 생성. 손은 상반신 프레임 하단이라 큰 손짓보다 절제된 동작이 적합
+- **idle 팔 포즈 (armPose 루프)**: arm/elbow 채널 단독 소유. idle=포즈 alt, **speaking=rest로 양보** → 발화 제스처가 큐 후순위로 per-channel 승(루프는 생성 시 add, 제스처는 발화 시 add). 포즈 추가 시 **양팔 전 채널 명시**(잔상 방지) + `IDLE_ARM_POSES`에 넣으면 DebugPanel `companion:idlepose` 버튼 자동 생성. 몸통 둘러보기는 `pose` 루프(spine 단독) alt로 추가(머리 FK 상속). 상세 [docs/idle-arm-plan.md](docs/idle-arm-plan.md)
+- **컬러 그레이딩 = 화면 레이어**: EffectComposer 포스트프로세싱은 모델 머티리얼 비훼손(개발 원칙1=비퇴행). 컴패니언 투명배경 알파 보존 확인됨. `store.grading` 디폴트=무변화(0). 사진편집식 톤은 머티리얼 튜닝(emission 등) 아닌 이 레이어로 해결
