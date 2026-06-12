@@ -9,7 +9,7 @@ import { useFrame } from '@react-three/fiber'
 import { VRM } from '@pixiv/three-vrm'
 import { AnimScheduler, type StateName, type AnimTemplate, type ChannelValues } from './scheduler'
 import { Channels, BASELINE, EMOTION_CHANNELS } from './channels'
-import { MOODS } from './moods'
+import { MOODS, IDLE_ARM_POSES } from './moods'
 
 // mthSurprised는 held 표정이 아니라 일회성 gasp 클립이 전담 → moodExprClip에서 제외
 // (채널 단일 소유: held 표정 vs 일회성 입벌림이 같은 채널을 안 건드리게 분리)
@@ -49,6 +49,7 @@ export function useAnimator(
   const activeMoodRef = useRef<string>('neutral') // 현재 표시 중인 무드 (gesture 풀 소스)
   const manualMoodRef = useRef<string | null>(null) // 디버그 패널 무드 트리거 대기
   const manualGestureRef = useRef<number | null>(null) // 디버그 패널 제스처 트리거 대기
+  const manualIdlePoseRef = useRef<number | null>(null) // 디버그 패널 idle 팔 포즈 트리거 대기
 
   const GESTURE_PROB = 0.6 // 발화당 제스처 발동 확률
 
@@ -62,11 +63,17 @@ export function useAnimator(
       const m = (e as CustomEvent).detail?.mood
       if (typeof m === 'string') manualMoodRef.current = m
     }
+    const onIdlePose = (e: Event) => {
+      const idx = (e as CustomEvent).detail?.index
+      if (typeof idx === 'number') manualIdlePoseRef.current = idx
+    }
     window.addEventListener('companion:gesture', onGesture)
     window.addEventListener('companion:mood', onMood)
+    window.addEventListener('companion:idlepose', onIdlePose)
     return () => {
       window.removeEventListener('companion:gesture', onGesture)
       window.removeEventListener('companion:mood', onMood)
+      window.removeEventListener('companion:idlepose', onIdlePose)
     }
   }, [])
 
@@ -112,6 +119,22 @@ export function useAnimator(
         scheduler.add(SURPRISE_GASP, false)
       }
       activeMoodRef.current = nextMood
+    }
+
+    // 디버그 패널 idle 팔 포즈 수동 트리거: out-hold-return 일회성으로 주입.
+    // 루프(armPose)보다 뒤에 add → per-channel 후순위 승 → 1.8s 유지 후 baseline 복귀.
+    if (manualIdlePoseRef.current !== null) {
+      const pose = IDLE_ARM_POSES[manualIdlePoseRef.current]
+      manualIdlePoseRef.current = null
+      if (pose?.vs && pose.dt) {
+        const vs: ChannelValues = {}
+        for (const ch of Object.keys(pose.vs)) {
+          const target = pose.vs[ch][0] as number
+          vs[ch] = [target, target, BASELINE[ch] ?? 0]
+        }
+        scheduler.remove('armpose-manual')
+        scheduler.add({ name: 'armpose-manual', ease: pose.ease, dt: [pose.dt[0], 1800, 700], vs }, false)
+      }
     }
 
     // 디버그 패널 수동 트리거: 항상 neutral 세트 (패널이 neutral 라벨 표시)

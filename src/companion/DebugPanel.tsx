@@ -1,9 +1,12 @@
 import { useRef, useState } from 'react'
 import { type Lang, type Gender } from './locales'
-import { MOODS } from './anim/moods'
+import { MOODS, IDLE_ARM_POSES } from './anim/moods'
 
 // 제스처 라벨 목록 (수동 트리거 버튼용). 인덱스가 MOODS.neutral.gestures와 일치
 const GESTURE_LABELS = MOODS.neutral.gestures.map((g, i) => g.label ?? `제스처 ${i}`)
+
+// idle 팔 포즈 라벨 (수동 트리거). 인덱스가 IDLE_ARM_POSES와 일치
+const IDLE_POSE_LABELS = IDLE_ARM_POSES.map((p, i) => p.label ?? `포즈 ${i}`)
 
 // 무드 목록 (표정 트리거 버튼용). MOODS 키 순서 = neutral/happy/sad/surprised/angry
 const MOOD_NAMES = Object.keys(MOODS)
@@ -14,6 +17,10 @@ function triggerGesture(index: number) {
 
 function triggerMood(mood: string) {
   window.dispatchEvent(new CustomEvent('companion:mood', { detail: { mood } }))
+}
+
+function triggerIdlePose(index: number) {
+  window.dispatchEvent(new CustomEvent('companion:idlepose', { detail: { index } }))
 }
 
 interface Props {
@@ -175,6 +182,26 @@ export function DebugPanel({ status, lastText, lang, gender, onEvent, onLangChan
             }}
           >
             {mood}
+          </button>
+        ))}
+      </div>
+
+      <hr style={{ border: 'none', borderTop: '1px solid #333', margin: '8px 0' }} />
+
+      {/* idle 팔 포즈 수동 트리거 — 축/진폭 검증용. 1.8s 유지 후 복귀 */}
+      <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>Idle Poses</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+        {IDLE_POSE_LABELS.map((label, i) => (
+          <button
+            key={i}
+            onClick={() => triggerIdlePose(i)}
+            style={{
+              background: '#064e3b', color: '#d1fae5',
+              border: '1px solid #059669', borderRadius: 6,
+              padding: '4px 8px', cursor: 'pointer', fontSize: 11,
+            }}
+          >
+            {label}
           </button>
         ))}
       </div>
