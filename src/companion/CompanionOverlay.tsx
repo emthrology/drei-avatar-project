@@ -6,6 +6,7 @@ import { CompanionAvatar, type CameraSettings } from './CompanionAvatar'
 import { googleTTS, type SpeakPayload } from './tts'
 import { type Lang, type Gender, type Reaction, type MoodName } from './locales'
 import { SceneLights } from '../components/SceneLights'
+import { GradingEffects } from '../components/GradingEffects'
 
 const TTS_API_KEY = import.meta.env.VITE_GOOGLE_TTS_API_KEY
 
@@ -106,6 +107,9 @@ export function CompanionOverlay({ avatarUrl, lang, gender, onStatusChange, onSp
 
         {/* VRM 로드 완료 후 본 기반으로 카메라 세팅 적용 */}
         {cameraSettings && <CameraRig settings={cameraSettings} />}
+
+        {/* 톤 그레이딩 — 에디터와 store.grading 공유. 투명 배경 알파 보존 검증 대상 */}
+        <GradingEffects />
       </Canvas>
 
       {/* 말풍선 — Canvas 위에 올라오도록 Canvas 이후 선언 */}

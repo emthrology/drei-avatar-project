@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useAvatarStore } from '../store'
 import { ShaderPanel } from './ShaderPanel'
 import { LightPanel } from './LightPanel'
+import { GradingPanel } from './GradingPanel'
 import { AnimationPanel } from './AnimationPanel'
 
 export function EditorPanel() {
@@ -113,6 +114,11 @@ export function EditorPanel() {
       {/* 조명 — 셰이더(rim/toony) 효과를 드러내는 음영 조절 */}
       <div className="border-t border-gray-800">
         <LightPanel />
+      </div>
+
+      {/* 톤 — 사진편집 스타일 컬러 그레이딩 (포스트프로세싱) */}
+      <div className="border-t border-gray-800">
+        <GradingPanel />
       </div>
 
       {/* Phase 4: 애니메이션 */}

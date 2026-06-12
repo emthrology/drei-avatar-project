@@ -12,6 +12,24 @@ export default function App() {
   const [lang, setLang] = useState<Lang>('en')
   const [gender, setGender] = useState<Gender>('male') // 번들 샘플이 남성 → 기본 male
 
+  // 컴패니언 배경 — 투명도 검증용 디버그. 체커보드면 캔버스 투명 여부가 명확히 보임
+  const [companionBg, setCompanionBg] = useState<'default' | 'checker' | 'magenta' | 'white'>('default')
+  const BG_CYCLE: typeof companionBg[] = ['default', 'checker', 'magenta', 'white']
+  const bgStyle: React.CSSProperties =
+    companionBg === 'checker'
+      ? {
+          backgroundColor: '#fff',
+          backgroundImage:
+            'linear-gradient(45deg,#bbb 25%,transparent 25%),linear-gradient(-45deg,#bbb 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#bbb 75%),linear-gradient(-45deg,transparent 75%,#bbb 75%)',
+          backgroundSize: '24px 24px',
+          backgroundPosition: '0 0,0 12px,12px -12px,-12px 0',
+        }
+      : companionBg === 'magenta'
+      ? { backgroundColor: '#ff00ff' }
+      : companionBg === 'white'
+      ? { backgroundColor: '#ffffff' }
+      : {}
+
   // 컴패니언 모드 디버그 상태
   const [companionStatus, setCompanionStatus] = useState<'loading' | 'ready' | 'speaking'>('loading')
   const [lastText, setLastText] = useState('')
@@ -59,6 +77,13 @@ export default function App() {
             >
               {lang.toUpperCase()}
             </button>
+            <button
+              onClick={() => setCompanionBg(b => BG_CYCLE[(BG_CYCLE.indexOf(b) + 1) % BG_CYCLE.length])}
+              className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700"
+              title="투명도 검증용 배경 전환"
+            >
+              BG: {companionBg}
+            </button>
           </>
         )}
       </div>
@@ -77,7 +102,7 @@ export default function App() {
 
       {/* 컴패니언 모드 */}
       {mode === 'companion' && (
-        <div className="flex-1 flex items-center justify-center text-gray-700 text-sm select-none">
+        <div className="flex-1 flex items-center justify-center text-gray-700 text-sm select-none" style={bgStyle}>
           Game Area
           <DebugPanel
             status={companionStatus}
