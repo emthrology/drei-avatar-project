@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import * as THREE from 'three'
-import { useAvatarStore } from '../store'
+import { useAvatarStore, SHADER_DEFAULTS, type ShaderParams } from '../store'
 
 // VRM scene ref를 공유하기 위한 간단한 모듈 싱글톤
 // (Zustand에 Three.js 오브젝트를 넣지 않기 위해)
@@ -9,23 +9,9 @@ export function setShaderPanelScene(scene: THREE.Object3D | null) {
   _vrmScene = scene
 }
 
-interface ShaderValues {
-  outlineWidth: number      // 0 ~ 0.02
-  rimMix: number            // 0 ~ 1
-  rimColor: string          // hex
-  shadingToonyFactor: number // 0 ~ 1
-}
-
-const DEFAULTS: ShaderValues = {
-  outlineWidth: 0.005,
-  rimMix: 0.3,
-  rimColor: '#99ccff',
-  shadingToonyFactor: 0.9,
-}
-
 export function ShaderPanel() {
-  const { meshInfos } = useAvatarStore()
-  const [vals, setVals] = useState<ShaderValues>(DEFAULTS)
+  // 값은 store에 보관 → 모드 전환으로 패널이 언마운트돼도 유지
+  const { meshInfos, shader: vals, setShader } = useAvatarStore()
 
   // 값이 바뀔 때마다 씬 traverse해서 MToonMaterial에 적용
   useEffect(() => {
@@ -39,16 +25,14 @@ export function ShaderPanel() {
         const m = mat as any
         if (!m.isMToonMaterial) return
         m.outlineWidthFactor = vals.outlineWidth
-        m.rimLightingMixFactor = vals.rimMix
-        m.rimColorFactor?.setStyle(vals.rimColor)
         m.shadingToonyFactor = vals.shadingToonyFactor
         m.needsUpdate = true
       })
     })
   }, [vals, meshInfos])
 
-  function update<K extends keyof ShaderValues>(key: K, value: ShaderValues[K]) {
-    setVals((v) => ({ ...v, [key]: value }))
+  function update<K extends keyof ShaderParams>(key: K, value: ShaderParams[K]) {
+    setShader({ [key]: value })
   }
 
   return (
@@ -64,24 +48,6 @@ export function ShaderPanel() {
       />
 
       <SliderRow
-        label="Rim 강도"
-        value={vals.rimMix}
-        min={0} max={1} step={0.01}
-        display={vals.rimMix.toFixed(2)}
-        onChange={(v) => update('rimMix', v)}
-      />
-
-      <label className="flex flex-col gap-1">
-        <span className="text-xs text-gray-400">Rim 색상</span>
-        <input
-          type="color"
-          value={vals.rimColor}
-          onChange={(e) => update('rimColor', e.target.value)}
-          className="w-full h-7 rounded cursor-pointer bg-transparent border border-gray-700"
-        />
-      </label>
-
-      <SliderRow
         label="툰 경계 선명도"
         value={vals.shadingToonyFactor}
         min={0} max={1} step={0.01}
@@ -90,7 +56,7 @@ export function ShaderPanel() {
       />
 
       <button
-        onClick={() => setVals(DEFAULTS)}
+        onClick={() => setShader(SHADER_DEFAULTS)}
         className="mt-1 py-1 rounded text-xs text-gray-500 hover:text-gray-300 border border-gray-700 hover:border-gray-500 transition-colors"
       >
         초기화
@@ -99,7 +65,7 @@ export function ShaderPanel() {
   )
 }
 
-function SliderRow({
+export function SliderRow({
   label, value, min, max, step, display, onChange,
 }: {
   label: string

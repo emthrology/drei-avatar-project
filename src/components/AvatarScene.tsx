@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, ContactShadows } from '@react-three/drei'
 import { VRMAvatar } from './VRMAvatar'
+import { SceneLights } from './SceneLights'
 
 interface AvatarSceneProps {
   avatarUrl: string
@@ -16,24 +17,6 @@ function FallbackBox() {
   )
 }
 
-function Lights() {
-  return (
-    <>
-      {/* MToonMaterial은 환경맵 무시 — 명시적 조명 필요 */}
-      <ambientLight intensity={0.6} />
-      {/* 정면 메인 조명 */}
-      <directionalLight
-        position={[0.5, 2, 2]}
-        intensity={2.0}
-        castShadow
-        shadow-mapSize={[1024, 1024]}
-      />
-      {/* 백라이트 (림라이트 보조) */}
-      <directionalLight position={[-1, 1, -2]} intensity={0.4} />
-    </>
-  )
-}
-
 export function AvatarScene({ avatarUrl }: AvatarSceneProps) {
   return (
     <Canvas
@@ -43,7 +26,7 @@ export function AvatarScene({ avatarUrl }: AvatarSceneProps) {
     >
       <color attach="background" args={['#1a1a2e']} />
 
-      <Lights />
+      <SceneLights castShadow />
 
       <Suspense fallback={<FallbackBox />}>
         {avatarUrl ? (

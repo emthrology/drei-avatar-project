@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useAvatarStore } from '../store'
 import { ShaderPanel } from './ShaderPanel'
+import { LightPanel } from './LightPanel'
 import { AnimationPanel } from './AnimationPanel'
 
 export function EditorPanel() {
@@ -107,6 +108,11 @@ export function EditorPanel() {
       {/* Phase 3: 셰이더 */}
       <div className="border-t border-gray-800">
         <ShaderPanel />
+      </div>
+
+      {/* 조명 — 셰이더(rim/toony) 효과를 드러내는 음영 조절 */}
+      <div className="border-t border-gray-800">
+        <LightPanel />
       </div>
 
       {/* Phase 4: 애니메이션 */}
