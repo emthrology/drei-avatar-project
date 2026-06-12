@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls, ContactShadows } from '@react-three/drei'
 import { VRMAvatar } from './VRMAvatar'
 import { SceneLights } from './SceneLights'
+import { GradingEffects } from './GradingEffects'
 
 interface AvatarSceneProps {
   avatarUrl: string
@@ -52,6 +53,9 @@ export function AvatarScene({ avatarUrl }: AvatarSceneProps) {
         maxDistance={6}
         enablePan={false}
       />
+
+      {/* 톤 컬러 그레이딩 — 화면 레이어 (모델 비퇴행). 디폴트 0이면 무변화 */}
+      <GradingEffects />
     </Canvas>
   )
 }
