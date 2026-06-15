@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useGLTF } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { VRMLoaderPlugin, VRM, VRMUtils, VRMHumanBoneName } from '@pixiv/three-vrm'
 import * as THREE from 'three'
 import { useAvatarStore, threeColorToHex } from '../store'
@@ -14,6 +14,8 @@ interface VRMAvatarProps {
 export function VRMAvatar({ url }: VRMAvatarProps) {
   const vrmRef = useRef<VRM | null>(null)
   const { setMeshInfos, meshInfos } = useAvatarStore()
+  const camera = useThree((s) => s.camera)
+  const controls = useThree((s) => s.controls)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const gltf = useGLTF(url, true, true, (loader: any) => {
@@ -42,6 +44,13 @@ export function VRMAvatar({ url }: VRMAvatarProps) {
       VRMUtils.deepDispose(vrm.scene)
     }
   }, [vrm, setMeshInfos])
+
+  // 로드 시 상반신 기준으로 카메라+OrbitControls target 1회 세팅(이후 조작은 자유).
+  // vrm·controls 양쪽이 준비됐을 때 실행 → 마운트 순서 무관(controls는 makeDefault로 등록)
+  useEffect(() => {
+    if (!vrm || !controls) return
+    frameUpperBody(vrm, camera as THREE.PerspectiveCamera, controls as unknown as OrbitControlsLike)
+  }, [vrm, camera, controls])
 
   // meshInfos 변경 → 실제 Three.js 오브젝트에 반영
   useEffect(() => {
@@ -74,6 +83,48 @@ export function VRMAvatar({ url }: VRMAvatarProps) {
 
   if (!vrm) return null
   return <primitive object={vrm.scene} />
+}
+
+// OrbitControls 최소 인터페이스 (drei controls 타입이 느슨해 직접 명시)
+interface OrbitControlsLike {
+  target: THREE.Vector3
+  update: () => void
+}
+
+// 로드된 모델의 상반신(hips→머리끝)을 화면 중앙에 맞추는 카메라/타깃 산출.
+// 컴패니언 computeUpperBodyCamera와 동일 발상(본+Box3 최상단) — fov는 에디터 카메라값 사용.
+// 본 누락/origin 모델은 표준 VRM 신장으로 fallback. 모델 불문 헤어 끝까지 포함(Box3.max.y).
+function frameUpperBody(
+  vrm: VRM,
+  camera: THREE.PerspectiveCamera,
+  controls: OrbitControlsLike,
+) {
+  vrm.scene.updateWorldMatrix(true, true)
+
+  const headBone = vrm.humanoid.getNormalizedBoneNode(VRMHumanBoneName.Head)
+  const hipsBone = vrm.humanoid.getNormalizedBoneNode(VRMHumanBoneName.Hips)
+  const headPos = new THREE.Vector3()
+  const hipsPos = new THREE.Vector3()
+  headBone?.getWorldPosition(headPos)
+  hipsBone?.getWorldPosition(hipsPos)
+  if (headPos.y < 0.1) headPos.y = 1.6
+  if (hipsPos.y < 0.1) hipsPos.y = 0.95
+
+  const torsoHeight = headPos.y - hipsPos.y
+  const bbox = new THREE.Box3().setFromObject(vrm.scene)
+  const headEstimate = headPos.y + torsoHeight * 0.3
+  const meshTop = isFinite(bbox.max.y) ? bbox.max.y : headEstimate
+  const spanTop = Math.max(meshTop, headEstimate) + torsoHeight * 0.05
+  const spanBot = hipsPos.y + torsoHeight * 0.15
+  const targetY = (spanTop + spanBot) / 2
+  const verticalSpan = spanTop - spanBot
+
+  // 에디터 카메라 fov 기준 수직 범위가 딱 차는 거리(10% 여백)
+  const dist = (verticalSpan / 2) / Math.tan(((camera.fov * Math.PI) / 180) / 2) * 1.1
+
+  camera.position.set(0, targetY, dist)
+  controls.target.set(0, targetY, 0)
+  controls.update()
 }
 
 // 편집 첫 화면 T-pose → 차렷. 상완을 몸 옆으로 내림(UpperArm z = ∓1.3 rad).
