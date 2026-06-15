@@ -8,8 +8,6 @@ export function LightPanel() {
 
   return (
     <div className="flex flex-col gap-3 p-4">
-      <h3 className="text-sm font-medium text-indigo-400">조명</h3>
-
       <SliderRow
         label="환경광 강도"
         value={lighting.ambient}

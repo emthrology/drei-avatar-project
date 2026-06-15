@@ -57,8 +57,6 @@ export function AnimationPanel() {
 
   return (
     <div className="p-4 flex flex-col gap-3">
-      <h3 className="text-sm font-medium text-indigo-400">애니메이션</h3>
-
       {clips.length === 0 ? (
         <p className="text-xs text-gray-600">
           이 VRM에 내장 애니메이션 없음
