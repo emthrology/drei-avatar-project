@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useGLTF } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { VRMLoaderPlugin, VRM, VRMUtils } from '@pixiv/three-vrm'
+import { VRMLoaderPlugin, VRM, VRMUtils, VRMHumanBoneName } from '@pixiv/three-vrm'
 import * as THREE from 'three'
 import { useAvatarStore, threeColorToHex } from '../store'
 import { setShaderPanelScene } from './ShaderPanel'
@@ -29,6 +29,7 @@ export function VRMAvatar({ url }: VRMAvatarProps) {
     if (!vrm) return
     vrmRef.current = vrm
     VRMUtils.rotateVRM0(vrm)
+    applyRestPose(vrm)
     setShaderPanelScene(vrm.scene)
     setAnimScene(vrm.scene, gltf.animations ?? [])
 
@@ -73,6 +74,17 @@ export function VRMAvatar({ url }: VRMAvatarProps) {
 
   if (!vrm) return null
   return <primitive object={vrm.scene} />
+}
+
+// 편집 첫 화면 T-pose → 차렷. 상완을 몸 옆으로 내림(UpperArm z = ∓1.3 rad).
+// 값/축은 컴패니언 anim BASELINE 불변식과 동일(CLAUDE.md: z=프론탈 들기/내리기, 좌−/우+).
+// 정적 적용 — 에디터엔 스케줄러가 없고 vrm.update(humanoid)가 매 프레임 normalized→raw 반영해 유지됨.
+// (AnimationPanel 클립 재생 시에만 mixer가 덮음 = 의도된 동작)
+function applyRestPose(vrm: VRM) {
+  const armL = vrm.humanoid.getNormalizedBoneNode(VRMHumanBoneName.LeftUpperArm)
+  const armR = vrm.humanoid.getNormalizedBoneNode(VRMHumanBoneName.RightUpperArm)
+  if (armL) armL.rotation.z = -1.3
+  if (armR) armR.rotation.z = 1.3
 }
 
 function collectMeshInfos(vrm: VRM) {
