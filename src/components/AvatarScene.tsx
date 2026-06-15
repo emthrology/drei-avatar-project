@@ -53,7 +53,7 @@ export function AvatarScene({ avatarUrl }: AvatarSceneProps) {
         target={[0, 1.0, 0]}
         minDistance={0.5}
         maxDistance={6}
-        enablePan={false}
+        enablePan
         zoomToCursor
       />
 
