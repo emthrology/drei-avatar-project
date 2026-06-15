@@ -37,8 +37,6 @@ export function ShaderPanel() {
 
   return (
     <div className="flex flex-col gap-3 p-4">
-      <h3 className="text-sm font-medium text-indigo-400">셰이더 (MToon)</h3>
-
       <SliderRow
         label="아웃라인 굵기"
         value={vals.outlineWidth}

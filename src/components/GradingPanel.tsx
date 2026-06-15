@@ -11,8 +11,6 @@ export function GradingPanel() {
 
   return (
     <div className="flex flex-col gap-3 p-4">
-      <h3 className="text-sm font-medium text-indigo-400">톤 (컬러 그레이딩)</h3>
-
       <SliderRow
         label="밝기"
         value={vals.brightness}
