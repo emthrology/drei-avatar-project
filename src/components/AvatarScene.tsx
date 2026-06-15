@@ -47,11 +47,14 @@ export function AvatarScene({ avatarUrl }: AvatarSceneProps) {
         />
       </Suspense>
 
+      {/* zoomToCursor: 스크롤 줌 시 커서 밑 지점이 화면에 머물도록 카메라+target 이동
+          → 얼굴에 커서 두고 줌인하면 얼굴 쪽으로. raycast 불필요(커서 광선 기준)라 전 모델 호환 */}
       <OrbitControls
         target={[0, 1.0, 0]}
         minDistance={0.5}
         maxDistance={6}
-        enablePan={false}
+        enablePan
+        zoomToCursor
       />
 
       {/* 톤 컬러 그레이딩 — 화면 레이어 (모델 비퇴행). 디폴트 0이면 무변화 */}
