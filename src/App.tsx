@@ -3,12 +3,13 @@ import { AvatarScene } from './components/AvatarScene'
 import { EditorPanel } from './components/EditorPanel'
 import { CompanionOverlay } from './companion/CompanionOverlay'
 import { DebugPanel } from './companion/DebugPanel'
+import { PocScene } from './poc/PocScene'
 import { useAvatarStore } from './store'
 import { type Lang, type Gender } from './companion/locales'
 
 export default function App() {
   const { avatarUrl } = useAvatarStore()
-  const [mode, setMode] = useState<'editor' | 'companion'>('editor')
+  const [mode, setMode] = useState<'editor' | 'companion' | 'poc'>('editor')
   const [lang, setLang] = useState<Lang>('en')
   const [gender, setGender] = useState<Gender>('male') // 번들 샘플이 남성 → 기본 male
 
@@ -67,6 +68,14 @@ export default function App() {
         >
           컴패니언
         </button>
+        <button
+          onClick={() => setMode('poc')}
+          className={`text-xs px-3 py-1 rounded transition-colors ${
+            mode === 'poc' ? 'bg-amber-600 text-white' : 'text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          PoC
+        </button>
 
         {mode === 'companion' && (
           <>
@@ -98,6 +107,13 @@ export default function App() {
             <EditorPanel />
           </div>
         </>
+      )}
+
+      {/* 에셋 스왑 PoC 모드 */}
+      {mode === 'poc' && (
+        <div className="flex-1">
+          <PocScene />
+        </div>
       )}
 
       {/* 컴패니언 모드 */}
