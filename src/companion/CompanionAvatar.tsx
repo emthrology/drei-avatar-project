@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { useGLTF } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { VRMLoaderPlugin, VRM, VRMUtils, VRMHumanBoneName } from '@pixiv/three-vrm'
+import { VRM, VRMHumanBoneName } from '@pixiv/three-vrm'
 import * as THREE from 'three'
 import { useLipsync } from './useLipsync'
 import { useAnimator } from './anim/useAnimator'
@@ -9,6 +8,9 @@ import { type StateName } from './anim/scheduler'
 import { useLookAt } from './useLookAt'
 import { type SpeakPayload } from './tts'
 import { type MoodName } from './locales'
+import { useAvatarStore } from '../store'
+import { getCharacter } from '../editor/constants'
+import { useAssembledVrm } from '../editor/useAssembledVrm'
 
 export interface CameraSettings {
   position: [number, number, number]
@@ -16,7 +18,8 @@ export interface CameraSettings {
 }
 
 interface Props {
-  url: string
+  // 업로드 오버라이드(있으면 단일 VRM). 없으면 store 캐릭터 base + 선택 파츠를 조립(에디터와 동일).
+  uploadUrl?: string | null
   speaking: boolean
   mood: MoodName
   onReady: (speak: (payload: SpeakPayload) => void) => void
@@ -60,36 +63,36 @@ function computeUpperBodyCamera(vrm: VRM): CameraSettings {
   }
 }
 
-export function CompanionAvatar({ url, speaking, mood, onReady, onCameraReady }: Props) {
-  const vrmRef = useRef<VRM | null>(null)
+export function CompanionAvatar({ uploadUrl, speaking, mood, onReady, onCameraReady }: Props) {
   const stateRef = useRef<StateName>('idle')
   stateRef.current = speaking ? 'speaking' : 'idle'
   const moodRef = useRef<string>('neutral')
   moodRef.current = mood
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const gltf = useGLTF(url, true, true, (loader: any) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    loader.register((parser: any) => new VRMLoaderPlugin(parser as any))
-  })
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const vrm: VRM | undefined = (gltf as any).userData?.vrm
+  // 조립 소스: 업로드 VRM(파츠 0개) 또는 store 캐릭터 base + 카탈로그(에디터 store 공유).
+  const characterId = useAvatarStore((s) => s.characterId)
+  const character = getCharacter(characterId)
+  const baseUrl = uploadUrl || character.baseUrl
+  const catalog = uploadUrl ? [] : character.catalog
+
+  const { vrm, vrmRef, syncFace } = useAssembledVrm(baseUrl, catalog)
 
   const { speak } = useLipsync(vrmRef)
   useAnimator(vrmRef, stateRef, moodRef)
   useLookAt(vrmRef)
 
+  // 조립 base 의 dispose/회전은 useAssembledVrm 이 담당. 여기선 ready/카메라만.
   useEffect(() => {
     if (!vrm) return
-    VRMUtils.rotateVRM0(vrm)
-    vrmRef.current = vrm
     onReady(speak)
     onCameraReady?.(computeUpperBodyCamera(vrm))
-    return () => { VRMUtils.deepDispose(vrm.scene) }
   }, [vrm, onReady, speak, onCameraReady])
 
   useFrame((_, delta) => {
-    vrmRef.current?.update(delta)
+    const v = vrmRef.current
+    if (!v) return
+    v.update(delta)
+    syncFace() // 얼굴 교체 시: base 표정/립싱크/시선 → 교체된 Face 미러
   })
 
   if (!vrm) return null

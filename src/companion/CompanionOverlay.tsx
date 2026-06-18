@@ -7,11 +7,13 @@ import { googleTTS, type SpeakPayload } from './tts'
 import { type Lang, type Gender, type Reaction, type MoodName } from './locales'
 import { SceneLights } from '../components/SceneLights'
 import { GradingEffects } from '../components/GradingEffects'
+import { useAvatarStore } from '../store'
 
 const TTS_API_KEY = import.meta.env.VITE_GOOGLE_TTS_API_KEY
 
 interface Props {
-  avatarUrl: string
+  // 업로드 오버라이드(있으면 단일 VRM). 없으면 store 조립 아바타(에디터에서 조합한 결과).
+  uploadUrl?: string | null
   lang: Lang
   gender: Gender
   onStatusChange?: (status: 'loading' | 'ready' | 'speaking') => void
@@ -28,7 +30,10 @@ function CameraRig({ settings }: { settings: CameraSettings }) {
   return null
 }
 
-export function CompanionOverlay({ avatarUrl, lang, gender, onStatusChange, onSpeak }: Props) {
+export function CompanionOverlay({ uploadUrl, lang, gender, onStatusChange, onSpeak }: Props) {
+  const characterId = useAvatarStore((s) => s.characterId)
+  // 소스 변경(업로드/캐릭터 전환) 시 리마운트 키 — 새 base 로 깨끗이 재조립
+  const sourceKey = uploadUrl ?? characterId
   const speakRef = useRef<((payload: SpeakPayload) => void) | null>(null)
   const [bubble, setBubble] = useState<string | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'speaking'>('loading')
@@ -96,8 +101,8 @@ export function CompanionOverlay({ avatarUrl, lang, gender, onStatusChange, onSp
 
         <Suspense fallback={null}>
           <CompanionAvatar
-            key={avatarUrl}
-            url={avatarUrl}
+            key={sourceKey}
+            uploadUrl={uploadUrl}
             speaking={status === 'speaking'}
             mood={mood}
             onReady={handleReady}

@@ -1,13 +1,10 @@
 import { useState } from 'react'
-import { AvatarScene } from './components/AvatarScene'
-import { EditorPanel } from './components/EditorPanel'
+import { EditorScene } from './editor/EditorScene'
 import { CompanionOverlay } from './companion/CompanionOverlay'
 import { DebugPanel } from './companion/DebugPanel'
-import { useAvatarStore } from './store'
 import { type Lang, type Gender } from './companion/locales'
 
 export default function App() {
-  const { avatarUrl } = useAvatarStore()
   const [mode, setMode] = useState<'editor' | 'companion'>('editor')
   const [lang, setLang] = useState<Lang>('en')
   const [gender, setGender] = useState<Gender>('male') // 번들 샘플이 남성 → 기본 male
@@ -44,8 +41,6 @@ export default function App() {
     setCompanionStatus('loading')
     setLastText('')
   }
-
-  const effectiveAvatarUrl = companionAvatarUrl ?? (avatarUrl || '/avatars/male_sample.vrm')
 
   return (
     <div className="flex w-full h-full bg-gray-950 relative">
@@ -88,16 +83,11 @@ export default function App() {
         )}
       </div>
 
-      {/* 에디터 모드 */}
+      {/* 에디터 모드 — 조립(authored base + 모듈 파츠) */}
       {mode === 'editor' && (
-        <>
-          <div className="flex-1 relative">
-            <AvatarScene avatarUrl={avatarUrl} />
-          </div>
-          <div className="w-72 shrink-0 border-l border-gray-800">
-            <EditorPanel />
-          </div>
-        </>
+        <div className="flex-1">
+          <EditorScene />
+        </div>
       )}
 
       {/* 컴패니언 모드 */}
@@ -115,8 +105,7 @@ export default function App() {
             onAvatarLoad={handleAvatarLoad}
           />
           <CompanionOverlay
-            key={effectiveAvatarUrl}
-            avatarUrl={effectiveAvatarUrl}
+            uploadUrl={companionAvatarUrl}
             lang={lang}
             gender={gender}
             onStatusChange={setCompanionStatus}

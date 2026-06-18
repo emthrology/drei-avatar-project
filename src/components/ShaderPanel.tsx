@@ -1,35 +1,11 @@
-import { useEffect } from 'react'
-import * as THREE from 'three'
 import { useAvatarStore, SHADER_DEFAULTS, type ShaderParams } from '../store'
 
-// VRM scene ref를 공유하기 위한 간단한 모듈 싱글톤
-// (Zustand에 Three.js 오브젝트를 넣지 않기 위해)
-let _vrmScene: THREE.Object3D | null = null
-export function setShaderPanelScene(scene: THREE.Object3D | null) {
-  _vrmScene = scene
-}
+// 셰이더 슬라이더 → store.shader 갱신만. 실제 씬 머티리얼 적용은 공유 조립 훅
+// (useAssembledVrm → appearance.applyAppearance)이 담당 → 에디터·컴패니언 동일 적용.
 
 export function ShaderPanel() {
   // 값은 store에 보관 → 모드 전환으로 패널이 언마운트돼도 유지
-  const { meshInfos, shader: vals, setShader } = useAvatarStore()
-
-  // 값이 바뀔 때마다 씬 traverse해서 MToonMaterial에 적용
-  useEffect(() => {
-    if (!_vrmScene || meshInfos.length === 0) return
-
-    _vrmScene.traverse((obj) => {
-      if (!(obj instanceof THREE.Mesh)) return
-      const mats = Array.isArray(obj.material) ? obj.material : [obj.material]
-      mats.forEach((mat) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const m = mat as any
-        if (!m.isMToonMaterial) return
-        m.outlineWidthFactor = vals.outlineWidth
-        m.shadingToonyFactor = vals.shadingToonyFactor
-        m.needsUpdate = true
-      })
-    })
-  }, [vals, meshInfos])
+  const { shader: vals, setShader } = useAvatarStore()
 
   function update<K extends keyof ShaderParams>(key: K, value: ShaderParams[K]) {
     setShader({ [key]: value })

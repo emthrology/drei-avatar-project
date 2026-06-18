@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useAvatarStore } from '../store'
 import { Section } from './Section'
 import { ShaderPanel } from './ShaderPanel'
@@ -8,42 +8,22 @@ import { AnimationPanel } from './AnimationPanel'
 
 export function EditorPanel() {
   const {
-    avatarUrl, setAvatarUrl,
     meshInfos, setMeshVisible, setMeshLitColor, setMeshShadeColor,
   } = useAvatarStore()
 
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedMesh, setSelectedMesh] = useState<string | null>(null)
   // 단일 오픈 아코디언: 한 번에 하나만 펼침(같은 헤더 재클릭 시 닫힘)
   const [openSection, setOpenSection] = useState<string>('파츠 / 색상')
   const toggle = (id: string) => setOpenSection((cur) => (cur === id ? '' : id))
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setAvatarUrl(URL.createObjectURL(file))
-    setSelectedMesh(null)
-  }
-
   const selected = meshInfos.find((m) => m.name === selectedMesh)
 
   return (
     <div className="flex flex-col h-full bg-gray-900 text-gray-100 overflow-hidden">
-      {/* 상단 고정 헤더 */}
+      {/* 상단 고정 헤더 — 조립(authored base+parts). 파츠 선택은 좌측 카탈로그 피커. */}
       <div className="p-4 border-b border-gray-800">
-        <h2 className="text-lg font-semibold text-indigo-400 mb-3">Avatar Editor</h2>
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="w-full py-2 px-3 bg-indigo-600 hover:bg-indigo-500 rounded text-sm transition-colors"
-        >
-          .vrm / .glb 불러오기
-        </button>
-        <input ref={fileInputRef} type="file" accept=".vrm,.glb" className="hidden" onChange={handleFileChange} />
-        {avatarUrl && (
-          <p className="mt-1 text-xs text-gray-500 truncate">
-            {avatarUrl.startsWith('blob:') ? '로컬 파일' : avatarUrl}
-          </p>
-        )}
+        <h2 className="text-lg font-semibold text-indigo-400">Avatar Editor</h2>
+        <p className="mt-1 text-xs text-gray-500">파츠는 좌측 카탈로그에서 선택 · 여기선 색/셰이더/조명/톤 조정</p>
       </div>
 
       {/* 본문 — 전체 스크롤(안전망) + 접이식 섹션(공간 관리) */}
