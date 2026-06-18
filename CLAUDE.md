@@ -33,21 +33,30 @@ VRoid VRM 아바타를 불러와 MToon 셰이더로 파츠/색상을 실시간 �
 drei-avatar-project/
 ├── public/
 │   └── avatars/
-│       └── male_sample.vrm   # 12MB VRoid 샘플 아바타
+│       ├── male_base.vrm     # 남자1 베이스(컨벤션 락 키스톤) · male1/ 파츠 라이브러리
+│       ├── female1/          # 여자1 베이스 + 파츠(Tops/Bottoms/Hair/Face)
+│       ├── thumbs/           # 카탈로그 썸네일 PNG (renderThumbs 산출, 커밋)
+│       └── male_sample.vrm   # 컴패니언 디폴트 샘플 아바타
 ├── src/
+│   ├── editor/                  # ── 에셋 조립 엔진 (composer 흡수, 에디터·컴패니언 공유) ──
+│   │   ├── useAssembledVrm.ts   #   ★공유 조립 훅: base 로드 + 슬롯 diff + faceRef + 외형값 적용. 에디터/컴패니언 양쪽이 사용
+│   │   ├── appearance.ts        #   applyAppearance(씬, shader, meshInfos) — 셰이더·색 머티리얼 적용(에디터·컴패니언 공유)
+│   │   ├── EditorScene.tsx      #   3-pane: 좌 캐릭터셀렉터+카탈로그 / 중앙 3D / 우 EditorPanel
+│   │   ├── ComposerAvatar.tsx   #   useAssembledVrm + 에디터 정책(restpose/프레이밍/ShaderPanel·AnimationPanel/meshInfos)
+│   │   ├── partLoader.ts        #   loadPart(GLB rebind) / loadSpringPart(VRM 스프링헤어 병합) / loadFacePart(얼굴교체+눈graft+표정미러)
+│   │   ├── constants.ts         #   CHARACTERS[] (베이스별 catalog) · Selection · VARIANTS_BY_ID · BASE_SPEC(컨벤션 락)
+│   │   └── ui/                  #   CatalogPicker(탭+썸네일 그리드) · VariantCard
 │   ├── components/
-│   │   ├── AvatarScene.tsx   # Canvas + SceneLights + GradingEffects + OrbitControls
-│   │   ├── VRMAvatar.tsx     # VRM 로딩, MToon 파라미터 적용, 프레임 업데이트
 │   │   ├── SceneLights.tsx   # 에디터·컴패니언 공유 조명 (store.lighting 단일 소스)
 │   │   ├── GradingEffects.tsx# 컬러 그레이딩 포스트프로세싱 (EffectComposer, store.grading)
-│   │   ├── EditorPanel.tsx   # 에디터 우측 패널 (파츠/색상/셰이더/조명/톤/애니메이션)
-│   │   ├── ShaderPanel.tsx   # MToon: 외곽선 굵기 + 툰 경계 (rim 제거됨, module singleton)
+│   │   ├── EditorPanel.tsx   # 에디터 우측 패널 (색상/셰이더/조명/톤/애니메이션) — 업로드 제거(조립 전용)
+│   │   ├── ShaderPanel.tsx   # MToon 슬라이더(외곽선/툰경계) → store.shader. 적용은 공유 appearance.ts
 │   │   ├── LightPanel.tsx    # 조명 슬라이더 (환경광/메인광 강도·각도)
 │   │   ├── GradingPanel.tsx  # 톤 슬라이더 (밝기/대비/색조/채도)
 │   │   └── AnimationPanel.tsx# 내장 애니메이션 클립 목록 + 재생
 │   ├── companion/
 │   │   ├── CompanionOverlay.tsx  # fixed 오버레이 (300×400, bottom-right)
-│   │   ├── CompanionAvatar.tsx   # VRM 로딩 + 본기반 카메라 프레이밍 + 립싱크/애니/시선
+│   │   ├── CompanionAvatar.tsx   # useAssembledVrm(조립 공유) + 본기반 카메라 + 립싱크/애니/시선. 업로드는 catalog=[] 오버라이드
 │   │   ├── DebugPanel.tsx        # 컴패니언 디버그 패널 (상태/이벤트/언어/VRM 로드)
 │   │   ├── useLipsync.ts         # word timing → 음소 스케줄 → viseme
 │   │   ├── lipsyncEn.ts          # 영어 단어 → Oculus 15 viseme 음소 분해
@@ -61,9 +70,9 @@ drei-avatar-project/
 │   │   ├── useGameEvents.ts      # window game:event 수신
 │   │   ├── tts.ts                # Google TTS REST API → AudioBuffer + word timing
 │   │   └── locales.ts            # ko/en 반응 대사 + TTS_CONFIG
-│   ├── store.ts              # Zustand: avatarUrl, meshInfos, lighting, shader, grading
+│   ├── store.ts              # Zustand: characterId/selection/eyeColor/partStatus(조립) + meshInfos/lighting/shader/grading
 │   ├── vite-env.d.ts         # VITE_GOOGLE_TTS_API_KEY 타입 선언
-│   └── App.tsx               # 에디터/컴패니언 모드 전환
+│   └── App.tsx               # 에디터(조립)/컴패니언 모드 전환
 ├── .env                      # VITE_GOOGLE_TTS_API_KEY (선택)
 └── package.json
 ```
@@ -99,13 +108,13 @@ useFrame((_, delta) => { vrm.update(delta) })
 
 ## MToon 셰이더 파라미터 (ShaderPanel)
 
-module singleton 패턴으로 vrm.scene을 공유:
-```ts
-let _vrmScene: THREE.Object3D | null = null
-export function setShaderPanelScene(scene) { _vrmScene = scene }
-```
+ShaderPanel은 슬라이더로 `store.shader`만 갱신. **실제 씬 머티리얼 적용은 공유 조립 훅**
+(`useAssembledVrm` → `editor/appearance.ts` `applyAppearance`)이 담당 → **에디터·컴패니언 동일 적용**.
+(이전 `setShaderPanelScene` module singleton 패턴은 폐기 — 컴패니언이 ShaderPanel을 안 띄워 적용
+누락됐던 버그를 공유 계층으로 해소.) 메시 색(lit/shade)도 같은 `applyAppearance`로 양쪽 적용.
+가시성(show/hide)만 에디터 전용(컴패니언 가시성은 파츠 로더가 소유).
 
-조작 가능한 파라미터 (전역):
+조작 가능한 파라미터 (전역, `store.shader`):
 - `outlineWidthFactor` — 외곽선 두께 (0~0.02)
 - `shadingToonyFactor` — 툰 경계 선명도 (0~1, 높을수록 명확한 경계)
 
@@ -159,7 +168,7 @@ VITE_GOOGLE_TTS_API_KEY=your_key_here
 />
 ```
 
-VRM 로드 흐름: 파일 선택 → `URL.createObjectURL(file)` → `setCompanionAvatarUrl(url)` → `effectiveAvatarUrl` 변경 → `<CompanionOverlay key={effectiveAvatarUrl} />` 리마운트
+VRM 로드 흐름(업로드 오버라이드): 파일 선택 → `URL.createObjectURL(file)` → `setCompanionAvatarUrl(url)` → `<CompanionOverlay uploadUrl={url}>` → CompanionAvatar 가 `catalog=[]` 단일 VRM 으로 조립(파츠 0). **uploadUrl 없으면 store 조립 아바타**(에디터 결과) 표시 — `sourceKey=uploadUrl ?? characterId` 로 리마운트.
 
 ## 해결된 버그 (이력)
 
@@ -189,6 +198,9 @@ VRM 로드 흐름: 파일 선택 → `URL.createObjectURL(file)` → `setCompani
 - [x] **에디터 조명 컨트롤 + 공유 SceneLights** — `store.lighting`로 에디터/컴패니언 조명 공유, LightPanel 슬라이더(환경광/메인광 강도·각도). rim 제거
 - [x] **컬러 그레이딩 (포스트프로세싱)** — 사진편집식 톤(밝기/대비/색조/채도). EffectComposer 화면 레이어(모델 비훼손), 에디터·컴패니언 `store.grading` 공유. emission/outline색/shadingShift는 모델 검증 후 폐기 ([docs/shader-features-plan.md](docs/shader-features-plan.md), [docs/drei-opportunities.md](docs/drei-opportunities.md))
 - [x] **idle 자연스러운 팔 동작 (FK)** — armPose 루프(허리짚기/뒷짐/미세 무게이동) + 몸통 둘러보기. IK는 보류 ([docs/idle-arm-plan.md](docs/idle-arm-plan.md))
+- [x] **에디터 = 에셋 조립 (avatar-composer 흡수)** — 임의 VRM 업로드 폐기(authored-only). 에디터가 `CHARACTERS[]`(남자1/여자1) base + 모듈 파츠 카탈로그 조립으로 전환. `src/editor/`(constants/partLoader/ComposerAvatar/EditorScene/ui). 좌측 카탈로그 피커(face/hair/tops/bottoms 스왑) + 우측 공유 설정(색/셰이더/조명/톤). seam: 파츠 교체 후 `meshInfos` 재수집 → 색/셰이더 패널이 새 파츠 인지. composer 정책(유휴시선/wave/더미)은 벗기고 drei 정책(restpose/프레이밍) 주입. PoC 모드·AvatarScene·VRMAvatar 제거. (composer `INTEGRATION.md`/`INTEGRATION_GAP.md`)
+- [x] **컴패니언 = 에디터 조립 아바타 공유** — 조립 엔진을 `useAssembledVrm` 훅으로 추출(ComposerAvatar·CompanionAvatar 공유). 컴패니언이 `store.characterId/selection/eyeColor`로 base+파츠를 동일 조립 → 에디터에서 조합한 결과가 그대로 보임. 컴패니언 립싱크/anim/시선은 조립 위에 얹음(faceRef.sync로 얼굴교체도 표정 미러). DebugPanel 업로드는 `catalog=[]` 단일 VRM 오버라이드로 잔류
+- [ ] **후속: 오프라인 파이프라인 이식** — `scripts/extractParts.mjs`+`renderThumbs.mjs`+`?thumb=` 모드. 자산은 이미 추출돼 있어 신규 에셋 추가 시에만 필요. devDeps(@gltf-transform, puppeteer) 추가
 - [ ] **후속: 무드 5단계 — 루프 톤 분기** — happy=활발한 머리/호흡, sad=느린 미동. 스케줄러 factory에 `moodName` 분기 추가 필요 (현재 루프는 전 무드 공유)
 - [ ] **후속: IK 도입** — 손이 보이는 제스처(손가슴 등) 정밀화. CCDIKSolver 채널 추상화. 상세 [docs/ik-plan.md](docs/ik-plan.md)
 - [ ] Phase 4: 애니메이션 미리보기 (내장 클립 재생), 스크린샷/내보내기
@@ -246,7 +258,16 @@ VRM preset은 입 모양 5개(aa/ih/ou/ee/oh)지만, VRoid 모델의 추가 입 
 - Zustand에 Three.js 객체(VRM, Object3D) 절대 넣지 말 것 → module singleton 사용
 - `vrm.update(delta)` 매 프레임 필수 — 없으면 springBone 물리(머리카락/옷)·lookAt·표정 정지
 - KTX2Loader 타입 충돌 (drei three-stdlib vs @types/three) → `loader`, `parser` `any` 캐스트
-- VRM 파츠는 Face_(merged), Body_(merged) 등 통합 메시 → 진정한 파츠 교체는 VRoid에서 별도 내보내기 필요
+- VRM 파츠는 Face_(merged), Body_(merged) 등 통합 메시 → **임의 업로드 VRM은 진정한 파츠 교체 불가**(merged). 에디터 조립은 이걸 풀려고 authored 베이스+파츠 라이브러리로 전환: 외주가 베이스 위에 스키닝한 모듈 파츠(GLB/VRM)를 런타임 rebind/graft로 조립(`src/editor/partLoader.ts`). 컨벤션 락은 authored 경로에만 적용
+
+### 에셋 조립 엔진(src/editor/) 불변식 — 신규 파츠/로더 수정 시 준수
+
+- **base 불가지 로더**: `load*(url, baseVrm)` 시그니처 유지 — 새 기능도 baseVrm/스펙을 파라미터로 받게. 캐릭터(base) 추가는 `constants.ts` `CHARACTERS[]`에 1줄(베이스별 `{baseUrl, catalog}`)
+- **컨벤션 락(`BASE_SPEC`)**: VRM1.0·54본·`J_Bip_*`·A-pose·신장 1.756m·MToon. 파츠가 어기면 rebind 깨짐. 외주 사양은 composer `ASSET_SPEC.md`
+- **rebind/graft**: 외부 SkinnedMesh skinIndex는 자기 skeleton.bones 인덱스 → 같은 순서로 base 본 치환 + boneInverses 재사용. base에 없는 보조 본(소매 J_Sec_*, 눈 본)은 부모 아래로 graft 후 rebind 매칭. 스프링 헤어는 base springBoneManager에 addJoint 병합 → `vrm.update(delta)` 한 번에 같이 돔(이중 호출 금지)
+- **MToon 통일**: 옷 GLB는 prune으로 PBR 로드 → 런타임 `toMToon` 변환(shade≈base×0.87, toony 0.95)으로 base 툰과 톤 일치. 아웃라인은 의도적 미부착(촘촘한 의류서 뭉침)
+- **seam(meshInfos)**: 파츠 add/remove 후 `setMeshInfos(collectMeshInfos(base))` 재수집 — 색 패널·ShaderPanel(`[vals, meshInfos]` 의존)이 새 파츠 인지. ComposerAvatar가 슬롯 load 성공 직후 호출
+- **slot diff + genRef**: 카테고리 슬롯당 1개 active. 빠른 연속 선택은 genRef 토큰으로 늦게 끝난 로드 폐기(레이스 가드). 캐릭터 전환은 `<ComposerAvatar key={characterId}>` remount + dispose의 `useGLTF.clear(baseUrl)`
 
 ### 애니메이션 스케줄러(anim/) 불변식 — 신규 동작 추가 시 준수
 

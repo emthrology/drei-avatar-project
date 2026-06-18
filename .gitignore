@@ -6,3 +6,7 @@ dist/
 .DS_Store
 .vercel
 *.tsbuildinfo
+
+# 파츠 추출 원본 VRM (오프라인 파이프라인 Phase 7 전용, ~256MB). 런타임 미사용 → 미커밋.
+# 재추출 시 avatar-composer 에서 복사. 런타임 산출물(GLB/VRM 파츠·썸네일)은 커밋.
+public/avatars/*/parts/

@@ -1,15 +1,11 @@
 import { useState } from 'react'
-import { AvatarScene } from './components/AvatarScene'
-import { EditorPanel } from './components/EditorPanel'
+import { EditorScene } from './editor/EditorScene'
 import { CompanionOverlay } from './companion/CompanionOverlay'
 import { DebugPanel } from './companion/DebugPanel'
-import { PocScene } from './poc/PocScene'
-import { useAvatarStore } from './store'
 import { type Lang, type Gender } from './companion/locales'
 
 export default function App() {
-  const { avatarUrl } = useAvatarStore()
-  const [mode, setMode] = useState<'editor' | 'companion' | 'poc'>('editor')
+  const [mode, setMode] = useState<'editor' | 'companion'>('editor')
   const [lang, setLang] = useState<Lang>('en')
   const [gender, setGender] = useState<Gender>('male') // 번들 샘플이 남성 → 기본 male
 
@@ -46,8 +42,6 @@ export default function App() {
     setLastText('')
   }
 
-  const effectiveAvatarUrl = companionAvatarUrl ?? (avatarUrl || '/avatars/male_sample.vrm')
-
   return (
     <div className="flex w-full h-full bg-gray-950 relative">
       {/* 모드 전환 툴바 — DebugPanel(z-9999)보다 위에 둬서 항상 클릭 가능 */}
@@ -67,14 +61,6 @@ export default function App() {
           }`}
         >
           컴패니언
-        </button>
-        <button
-          onClick={() => setMode('poc')}
-          className={`text-xs px-3 py-1 rounded transition-colors ${
-            mode === 'poc' ? 'bg-amber-600 text-white' : 'text-gray-400 hover:text-gray-200'
-          }`}
-        >
-          PoC
         </button>
 
         {mode === 'companion' && (
@@ -97,22 +83,10 @@ export default function App() {
         )}
       </div>
 
-      {/* 에디터 모드 */}
+      {/* 에디터 모드 — 조립(authored base + 모듈 파츠) */}
       {mode === 'editor' && (
-        <>
-          <div className="flex-1 relative">
-            <AvatarScene avatarUrl={avatarUrl} />
-          </div>
-          <div className="w-72 shrink-0 border-l border-gray-800">
-            <EditorPanel />
-          </div>
-        </>
-      )}
-
-      {/* 에셋 스왑 PoC 모드 */}
-      {mode === 'poc' && (
         <div className="flex-1">
-          <PocScene />
+          <EditorScene />
         </div>
       )}
 
@@ -131,8 +105,7 @@ export default function App() {
             onAvatarLoad={handleAvatarLoad}
           />
           <CompanionOverlay
-            key={effectiveAvatarUrl}
-            avatarUrl={effectiveAvatarUrl}
+            uploadUrl={companionAvatarUrl}
             lang={lang}
             gender={gender}
             onStatusChange={setCompanionStatus}
