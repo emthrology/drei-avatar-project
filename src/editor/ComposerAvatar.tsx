@@ -4,7 +4,9 @@ import { VRM, VRMHumanBoneName } from '@pixiv/three-vrm'
 import * as THREE from 'three'
 import { PartCategoryDef } from './constants'
 import { useAssembledVrm } from './useAssembledVrm'
+import { SHADOWED_BY_PART } from './partLoader'
 import { useAvatarStore, threeColorToHex, type MeshInfo } from '../store'
+import { labelForMaterialName } from './meshLabels'
 import { setAnimScene, updateAnimMixer } from '../components/AnimationPanel'
 
 // 에디터 조립 아바타 — 공유 조립 엔진(useAssembledVrm)에 drei 에디터 정책을 얹는다:
@@ -126,6 +128,8 @@ function collectMeshInfos(vrm: VRM): MeshInfo[] {
 
   vrm.scene.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return
+    // 파츠 로더가 가린 base 메시(얼굴 교체 시 숨긴 base 얼굴)는 제외 — 중복 행·토글 충돌 차단
+    if (obj.userData[SHADOWED_BY_PART]) return
     if (seen.has(obj.name)) return
     seen.add(obj.name)
 
@@ -135,6 +139,8 @@ function collectMeshInfos(vrm: VRM): MeshInfo[] {
 
     infos.push({
       name: obj.name,
+      // 부위 라벨 — 머티리얼 명명 규칙(meshLabels) 기반, 미매칭 시 원본 메시 이름으로 fallback
+      label: labelForMaterialName(m?.name) ?? (obj.name || '(unnamed)'),
       visible: obj.visible,
       litColor: m?.color ? threeColorToHex(m.color) : '#ffffff',
       shadeColor: m?.shadeColorFactor ? threeColorToHex(m.shadeColorFactor) : '#888888',

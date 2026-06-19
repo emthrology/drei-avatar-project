@@ -6,7 +6,8 @@ import {
 } from './editor/constants'
 
 export interface MeshInfo {
-  name: string
+  name: string        // 씬 메시 이름 — 매칭/색 적용 키(고유). React key 로도 사용
+  label: string       // 표시 전용 부위 라벨(editor/meshLabels 규칙). 미매칭 시 name 으로 채움
   visible: boolean
   litColor: string    // hex
   shadeColor: string  // hex
