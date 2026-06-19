@@ -91,6 +91,21 @@ drei-avatar-project/
 **⚠️ Ready Player Me 사용 불가** — 2026년 1월 Netflix 인수 후 서비스 종료.
 **GLB 사용 시 주의** — @pixiv/three-vrm는 .vrm 파일 로딩 전용. GLB는 VRM 메타데이터 없음.
 
+## 에셋 추가 워크플로 (오프라인 파이프라인)
+
+새 파츠(옷·헤어·얼굴)를 카탈로그에 추가하는 표준 절차. 흩어진 단계를 한 곳에 모은다.
+관련 코드: [scripts/extractParts.mjs](scripts/extractParts.mjs) · [scripts/renderThumbs.mjs](scripts/renderThumbs.mjs) · [src/editor/constants.ts](src/editor/constants.ts).
+
+1. **소스 VRM 배치.** VRoid Studio에서 해당 캐릭터 **베이스 위에** 파츠를 입혀 export → `public/avatars/<char>/parts/`에 둔다 (예: `male1/parts/male_top_xyz.vrm`).
+   - ⚠️ `parts/`는 **gitignore**(미커밋, ~256MB). 다른 환경에선 avatar-composer에서 복사. 런타임 산출물만 커밋한다.
+2. **추출 잡 1줄** — `scripts/extractParts.mjs` `JOBS` 배열에 추가. 옷=`vrm:false`(→GLB), 스프링헤어·얼굴=`vrm:true`(→VRM, MToon·스프링 보존). 머티리얼 필터(`keepMaterial`)·멀티메시(`meshes:[]`)·본 네임스페이스(`nsBones`)는 기존 항목 참고.
+3. **카탈로그 1줄** — `src/editor/constants.ts` 해당 캐릭터의 `catalog[category].variants`에 `{id, label, url, thumb}` 추가. `id`는 **전역 고유**(썸네일 파일명·선택 키). url은 2번 `out` 경로와 일치.
+4. **`npm run assets`** — extract→thumbs 일괄. (개별: `npm run extract` / `npm run thumbs`). puppeteer가 `?thumb=` 경로로 단독 렌더해 `thumbs/<id>.png` 생성.
+5. **커밋 대상** — 런타임 산출물(`<char>/*.glb`·`*.vrm`)과 **썸네일 PNG**(puppeteer 재생성 불가, 소스 취급). `parts/` 원본은 제외.
+
+- **새 캐릭터(베이스) 추가**는 `CHARACTERS[]`에 `{id, label, baseUrl, catalog}` 1개 — 엔진은 base 불가지라 무수정. variant id는 캐릭터 프리픽스로 분리(예 `f1-`).
+- **⚠️ Vercel:** `prebuild` 없음. `parts/` 소스가 미커밋이라 빌드 서버에선 추출 불가 → 위 산출물을 **커밋해야** 배포에 반영된다. 파이프라인은 로컬 전용.
+
 ## VRM 로딩 패턴
 
 ```tsx
