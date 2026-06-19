@@ -11,6 +11,13 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 // 본 이름 매칭 후 boneInverses 를 재사용해 rebind 한다.
 // ───────────────────────────────────────────────────────────────────────────
 
+// 파츠 로더가 가시성을 '소유'해 숨긴 base 메시 표식(userData 키). 얼굴 교체 시 base 얼굴은
+// 삭제가 아니라 숨김으로 남는데, 에디터 메시 리스트(collectMeshInfos)가 이걸 그대로 수집하면
+//   ① swap 얼굴과 같은 부위 라벨로 중복 행이 뜨고
+//   ② 숨김 행을 토글하면 가시성 effect 가 로더의 숨김을 덮어써 두 얼굴이 겹친다(이중 소유 충돌).
+// → 이 표식이 달린 메시는 리스트에서 제외해 중복·충돌을 함께 차단한다. dispose 시 해제.
+export const SHADOWED_BY_PART = '__shadowedByPart'
+
 export interface LoadedPart {
   root: THREE.Object3D // base scene 에 추가된 객체(또는 head 본에 부착된 리지드 루트)
   skinned: THREE.SkinnedMesh[] // base 스켈레톤으로 rebind 된 스킨드 메시
@@ -454,10 +461,14 @@ export async function loadFacePart(url: string, baseVrm: VRM): Promise<LoadedFac
     }
   }
 
-  // 6) 가시성: 새 얼굴 ON → base 얼굴 숨김(겹침 방지) / OFF → base 얼굴 복원
+  // 6) 가시성: 새 얼굴 ON → base 얼굴 숨김(겹침 방지) / OFF → base 얼굴 복원.
+  //    숨길 때 base 얼굴에 SHADOWED_BY_PART 표식 → 에디터 리스트가 제외(중복 행·토글 충돌 차단).
   const setVisible = (v: boolean) => {
     meshes.forEach((m) => { m.visible = v })
-    baseFaceMeshes.forEach((m) => { m.visible = !v })
+    baseFaceMeshes.forEach((m) => {
+      m.visible = !v
+      m.userData[SHADOWED_BY_PART] = v
+    })
   }
 
   const dispose = () => {
@@ -468,7 +479,7 @@ export async function loadFacePart(url: string, baseVrm: VRM): Promise<LoadedFac
       mats.forEach((mat) => mat.dispose())
     }
     for (const b of graftedBones) b.removeFromParent()
-    baseFaceMeshes.forEach((m) => { m.visible = true }) // base 얼굴 복원
+    baseFaceMeshes.forEach((m) => { m.visible = true; delete m.userData[SHADOWED_BY_PART] }) // base 얼굴 복원 + 표식 해제
   }
 
   return { meshes, baseFaceMeshes, graftedBones, missingBones, sync, setEyeColor, setVisible, dispose }

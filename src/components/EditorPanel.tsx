@@ -54,7 +54,7 @@ export function EditorPanel() {
                   >
                     {m.visible ? '●' : '○'}
                   </button>
-                  <span className="truncate">{m.name || '(unnamed)'}</span>
+                  <span className="truncate" title={m.name}>{m.label || m.name || '(unnamed)'}</span>
                 </div>
               ))}
             </div>
@@ -63,7 +63,7 @@ export function EditorPanel() {
             <div className="w-1/2 overflow-y-auto p-3">
               {selected ? (
                 <div className="flex flex-col gap-4">
-                  <p className="text-xs text-indigo-300 truncate">{selected.name}</p>
+                  <p className="text-xs text-indigo-300 truncate" title={selected.name}>{selected.label || selected.name}</p>
 
                   <label className="flex flex-col gap-1">
                     <span className="text-xs text-gray-400">Lit (밝은 면)</span>

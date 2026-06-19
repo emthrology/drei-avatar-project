@@ -34,6 +34,9 @@ export type PartCategory = 'face' | 'hair' | 'tops' | 'bottoms'
 
 export interface PartVariant {
   id: string    // 전역 고유(썸네일 파일명·선택 키로도 쓰임)
+  // 표시 라벨 — **`[명칭][숫자]` 형식으로 통일**(여자1 기준): 얼굴/헤어/상의/하의 + 1부터 순번.
+  //   카테고리당 배열 순서대로 번호 매김(예: 상의 1, 상의 2 …). 서술형 명칭(화이트 셔츠 등) 금지.
+  //   id·url·파일명은 별개(영문 식별자 유지) — 라벨만 이 규칙을 따른다. 신규 variant 추가 시 준수.
   label: string
   url: string
   thumb: string // '/avatars/thumbs/<id>.png' (scripts/renderThumbs.mjs 산출)
@@ -69,14 +72,14 @@ export const CHARACTERS: CharacterDef[] = [
       {
         id: 'face', label: 'Face', kind: 'face', allowNone: true,
         variants: [
-          { id: 'face-eyesample', label: '눈 변형', url: '/avatars/male1/Face_eyesample.vrm', thumb: thumb('face-eyesample') },
+          { id: 'face-eyesample', label: '얼굴 1', url: '/avatars/male1/Face_eyesample.vrm', thumb: thumb('face-eyesample') },
           { id: 'face-2',         label: '얼굴 2',  url: '/avatars/male1/Face_2.vrm',         thumb: thumb('face-2') },
         ],
       },
       {
         id: 'hair', label: 'Hair', kind: 'spring', allowNone: true,
         variants: [
-          { id: 'hair-sample', label: '기본 헤어', url: '/avatars/Hair_sample.vrm',     thumb: thumb('hair-sample') },
+          { id: 'hair-sample', label: '헤어 1',   url: '/avatars/Hair_sample.vrm',     thumb: thumb('hair-sample') },
           { id: 'hair-2',      label: '헤어 2',    url: '/avatars/male1/Hair_2.vrm',    thumb: thumb('hair-2') },
           { id: 'hair-3',      label: '헤어 3',    url: '/avatars/male1/Hair_3.vrm',    thumb: thumb('hair-3') },
         ],
@@ -84,19 +87,19 @@ export const CHARACTERS: CharacterDef[] = [
       {
         id: 'tops', label: 'Tops', kind: 'static', allowNone: true,
         variants: [
-          { id: 'tops-white-shirt', label: '화이트 셔츠', url: '/avatars/male1/Tops_white_shirt.glb', thumb: thumb('tops-white-shirt') },
-          { id: 'tops-basic',       label: '베이직 티',   url: '/avatars/male1/Tops_basic.glb',       thumb: thumb('tops-basic') },
-          { id: 'tops-hawaian',     label: '하와이안',    url: '/avatars/male1/Tops_hawaian.glb',     thumb: thumb('tops-hawaian') },
-          { id: 'tops-2',           label: '상의 2',      url: '/avatars/male1/Tops_2.glb',           thumb: thumb('tops-2') },
-          { id: 'tops-3',           label: '상의 3',      url: '/avatars/male1/Tops_3.glb',           thumb: thumb('tops-3') },
+          { id: 'tops-white-shirt', label: '상의 1', url: '/avatars/male1/Tops_white_shirt.glb', thumb: thumb('tops-white-shirt') },
+          { id: 'tops-basic',       label: '상의 2', url: '/avatars/male1/Tops_basic.glb',       thumb: thumb('tops-basic') },
+          { id: 'tops-hawaian',     label: '상의 3', url: '/avatars/male1/Tops_hawaian.glb',     thumb: thumb('tops-hawaian') },
+          { id: 'tops-2',           label: '상의 4', url: '/avatars/male1/Tops_2.glb',           thumb: thumb('tops-2') },
+          { id: 'tops-3',           label: '상의 5', url: '/avatars/male1/Tops_3.glb',           thumb: thumb('tops-3') },
         ],
       },
       {
         id: 'bottoms', label: 'Bottoms', kind: 'static', allowNone: true,
         variants: [
-          { id: 'bottoms-scotch-pants', label: '스카치 팬츠', url: '/avatars/male1/Bottoms_scotch_pants.glb', thumb: thumb('bottoms-scotch-pants') },
-          { id: 'bottoms-jean',         label: '청바지',     url: '/avatars/male1/Bottoms_jean.glb',         thumb: thumb('bottoms-jean') },
-          { id: 'bottoms-white-pants',  label: '화이트 팬츠', url: '/avatars/male1/Bottoms_white_pants.glb',  thumb: thumb('bottoms-white-pants') },
+          { id: 'bottoms-scotch-pants', label: '하의 1', url: '/avatars/male1/Bottoms_scotch_pants.glb', thumb: thumb('bottoms-scotch-pants') },
+          { id: 'bottoms-jean',         label: '하의 2', url: '/avatars/male1/Bottoms_jean.glb',         thumb: thumb('bottoms-jean') },
+          { id: 'bottoms-white-pants',  label: '하의 3', url: '/avatars/male1/Bottoms_white_pants.glb',  thumb: thumb('bottoms-white-pants') },
         ],
       },
     ],
