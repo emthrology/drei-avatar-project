@@ -30,7 +30,7 @@ export interface ShaderParams {
 }
 
 export const SHADER_DEFAULTS: ShaderParams = {
-  outlineWidth: 0.005,
+  outlineWidth: 0.001,
   shadingToonyFactor: 0.9,
 }
 

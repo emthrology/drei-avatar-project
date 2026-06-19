@@ -70,12 +70,15 @@ export const CHARACTERS: CharacterDef[] = [
         id: 'face', label: 'Face', kind: 'face', allowNone: true,
         variants: [
           { id: 'face-eyesample', label: '눈 변형', url: '/avatars/male1/Face_eyesample.vrm', thumb: thumb('face-eyesample') },
+          { id: 'face-2',         label: '얼굴 2',  url: '/avatars/male1/Face_2.vrm',         thumb: thumb('face-2') },
         ],
       },
       {
         id: 'hair', label: 'Hair', kind: 'spring', allowNone: true,
         variants: [
-          { id: 'hair-sample', label: '기본 헤어', url: '/avatars/Hair_sample.vrm', thumb: thumb('hair-sample') },
+          { id: 'hair-sample', label: '기본 헤어', url: '/avatars/Hair_sample.vrm',     thumb: thumb('hair-sample') },
+          { id: 'hair-2',      label: '헤어 2',    url: '/avatars/male1/Hair_2.vrm',    thumb: thumb('hair-2') },
+          { id: 'hair-3',      label: '헤어 3',    url: '/avatars/male1/Hair_3.vrm',    thumb: thumb('hair-3') },
         ],
       },
       {
@@ -84,6 +87,8 @@ export const CHARACTERS: CharacterDef[] = [
           { id: 'tops-white-shirt', label: '화이트 셔츠', url: '/avatars/male1/Tops_white_shirt.glb', thumb: thumb('tops-white-shirt') },
           { id: 'tops-basic',       label: '베이직 티',   url: '/avatars/male1/Tops_basic.glb',       thumb: thumb('tops-basic') },
           { id: 'tops-hawaian',     label: '하와이안',    url: '/avatars/male1/Tops_hawaian.glb',     thumb: thumb('tops-hawaian') },
+          { id: 'tops-2',           label: '상의 2',      url: '/avatars/male1/Tops_2.glb',           thumb: thumb('tops-2') },
+          { id: 'tops-3',           label: '상의 3',      url: '/avatars/male1/Tops_3.glb',           thumb: thumb('tops-3') },
         ],
       },
       {

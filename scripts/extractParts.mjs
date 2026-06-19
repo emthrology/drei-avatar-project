@@ -45,6 +45,13 @@ const JOBS = [
   //   변형이 옮긴 눈 본(J_Adj_*FaceEye)만 네임스페이스 → 로더가 base 눈 본(46.7mm 어긋남) 대신 '자기 눈
   //   본'을 graft. 표정은 base 익스프레션 인덱스(양 파일 동일) 재사용 → base Face influences 를 새 Face 로 미러.
   { src: 'male_eye_sample.vrm',               mesh: 'Face',                                     out: 'male1/Face_eyesample.vrm', vrm: true, nsBones: 'FaceEye' },
+  { src: 'male1/parts/male_face_2.vrm',       mesh: 'Face',                                     out: 'male1/Face_2.vrm', vrm: true, nsBones: 'FaceEye' },
+  // 상의 추가(top_2 = Tops_01_CLOTH 1프리미티브 / top_3 = Tops_01_CLOTH_01·_02 2프리미티브, 둘 다 'Tops_01_CLOTH' 포함)
+  { src: 'male1/parts/male_top_2.vrm',        mesh: 'Body', keepMaterial: 'Tops_01_CLOTH',      out: 'male1/Tops_2.glb', vrm: false },
+  { src: 'male1/parts/male_top_3.vrm',        mesh: 'Body', keepMaterial: 'Tops_01_CLOTH',      out: 'male1/Tops_3.glb', vrm: false },
+  // 헤어 추가(female 동형: 앞머리 Hair001 + 뒷머리 Body/HairBack 2메시 + 스프링 보존, J_Sec_*Hair 네임스페이스)
+  { src: 'male1/parts/male_hair_2.vrm', meshes: [{ mesh: 'Hair001' }, { mesh: 'Body', keepMaterial: 'HairBack' }], out: 'male1/Hair_2.vrm', vrm: true, springKeep: 'Hair', nsBones: '^J_Sec_.*Hair' },
+  { src: 'male1/parts/male_hair_3.vrm', meshes: [{ mesh: 'Hair001' }, { mesh: 'Body', keepMaterial: 'HairBack' }], out: 'male1/Hair_3.vrm', vrm: true, springKeep: 'Hair', nsBones: '^J_Sec_.*Hair' },
 
   // ── female1 (베이스: female1/female_base.vrm) ──
   // 상의(Body 메시 Tops_01_CLOTH). top_3 은 타이(Accessory_Tie)·top_4 는 Onepiece/Shoes 가 섞여
