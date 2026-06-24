@@ -574,7 +574,11 @@ export type ExpressionKey =
   | 'browSorrow'
   | 'browSurprised'
   | 'eyeSurprised'
-  | 'mthSurprised';
+  | 'mthSurprised'
+  // happy 분해: 입·눈썹(held) + 눈(eyeJoy, 일회성). preset happy(Fcl_ALL_Joy) 대체
+  | 'mthJoy'
+  | 'browJoy'
+  | 'eyeJoy';
 
 export interface Mood {
   expression: Partial<Record<ExpressionKey, number>>; // 무드 표정 (채널 weight)
@@ -594,7 +598,9 @@ export const MOODS: Record<string, Mood> = {
     gestures: GESTURES,
   },
   happy: {
-    expression: { happy: 0.9 },
+    // 입·눈썹 미소만 held (preset Fcl_ALL_Joy의 눈 결합 제거) → 발화 내내 눈뜸 유지.
+    // 눈 웃음(eyeJoy)은 진입 시 일회성 클립(HAPPY_EYE, useAnimator)이 감았다 뜬다(surprised gasp와 동형).
+    expression: { mthJoy: 0.9, browJoy: 0.6 },
     loops: BASE_LOOPS,
     gestures: HAPPY_GESTURES,
   },
