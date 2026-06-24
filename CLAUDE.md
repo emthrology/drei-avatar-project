@@ -21,6 +21,7 @@ VRoid VRM 아바타를 불러와 MToon 셰이더로 파츠/색상을 실시간 �
 | 헬퍼/유틸 | `@react-three/drei` v9 |
 | 상태 관리 | Zustand v5 |
 | UI | React + Vite + Tailwind |
+| 테스트 | Vitest (`npm test` / `test:watch`) — 순수 로직 단위 테스트 |
 | 아바타 포맷 | VRM (VRoid Studio 직접 내보내기) |
 
 **Vite 필수** — R3F 생태계 표준, CRA 사용 금지.
@@ -33,9 +34,11 @@ VRoid VRM 아바타를 불러와 MToon 셰이더로 파츠/색상을 실시간 �
 drei-avatar-project/
 ├── public/
 │   └── avatars/
-│       ├── male_base.vrm     # 남자1 베이스(컨벤션 락 키스톤) · male1/ 파츠 라이브러리
-│       ├── female1/          # 여자1 베이스 + 파츠(Tops/Bottoms/Hair/Face)
+│       ├── male_base.vrm     # 남자1 베이스(컨벤션 락 키스톤)
+│       ├── male1/            # 남자1 파츠(Tops/Bottoms/Face/Hair) + parts/(미커밋 원본)
+│       ├── female1/          # 여자1 베이스 + 파츠(Tops/Bottoms/Hair/Face) + parts/(미커밋 원본)
 │       ├── thumbs/           # 카탈로그 썸네일 PNG (renderThumbs 산출, 커밋)
+│       ├── Hair_sample.vrm   # 남자1 헤어 1(루트 잔류 에셋) · male_eye_sample.vrm 도 동일
 │       └── male_sample.vrm   # 컴패니언 디폴트 샘플 아바타
 ├── src/
 │   ├── editor/                  # ── 에셋 조립 엔진 (composer 흡수, 에디터·컴패니언 공유) ──
@@ -51,6 +54,7 @@ drei-avatar-project/
 │   │   ├── SceneLights.tsx   # 에디터·컴패니언 공유 조명 (store.lighting 단일 소스)
 │   │   ├── GradingEffects.tsx# 컬러 그레이딩 포스트프로세싱 (EffectComposer, store.grading)
 │   │   ├── EditorPanel.tsx   # 에디터 우측 패널 (색상/셰이더/조명/톤/애니메이션) — 업로드 제거(조립 전용)
+│   │   ├── Section.tsx       # 에디터 패널 공용 접이식 섹션(아코디언, controlled 단일 오픈)
 │   │   ├── ShaderPanel.tsx   # MToon 슬라이더(외곽선/툰경계) → store.shader. 적용은 공유 appearance.ts
 │   │   ├── LightPanel.tsx    # 조명 슬라이더 (환경광/메인광 강도·각도)
 │   │   ├── GradingPanel.tsx  # 톤 슬라이더 (밝기/대비/색조/채도)
@@ -60,11 +64,11 @@ drei-avatar-project/
 │   │   ├── CompanionAvatar.tsx   # useAssembledVrm(조립 공유) + 본기반 카메라 + 립싱크/애니/시선. 업로드는 catalog=[] 오버라이드
 │   │   ├── DebugPanel.tsx        # 컴패니언 디버그 패널 (상태/이벤트/언어/VRM 로드)
 │   │   ├── useLipsync.ts         # word timing → 음소 스케줄 → viseme
-│   │   ├── lipsyncEn.ts          # 영어 단어 → Oculus 15 viseme 음소 분해
+│   │   ├── lipsyncEn.ts          # 영어 단어 → Oculus 15 viseme 음소 분해 (lipsyncEn.test.ts 콜로케이트)
 │   │   ├── visemeApplier.ts      # 모음→expressionManager / 자음→Fcl_MTH_* 직접
 │   │   ├── useLookAt.ts          # 시선 추적 + rangeMap 보정 + center/glance 사케이드
 │   │   ├── anim/                 # ── 절차 애니메이션 스케줄러 (B/C/E) ──
-│   │   │   ├── scheduler.ts      #   animFactory + tick(clock 보간) + gaussian + 클립별 ease
+│   │   │   ├── scheduler.ts      #   animFactory + tick(clock 보간) + gaussian + 클립별 ease (scheduler.test.ts 콜로케이트)
 │   │   │   ├── channels.ts       #   논리 채널 → VRM 본/표정. baseline(rest) 정의
 │   │   │   ├── moods.ts          #   무드 5종: 루프(호흡/머리/포즈/armPose팔/깜빡임) + 제스처 10종
 │   │   │   └── useAnimator.ts    #   R3F 훅. 발화 전환 시 랜덤 제스처 + idle 팔 포즈 트리거
