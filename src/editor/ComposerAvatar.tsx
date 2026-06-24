@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { VRM, VRMHumanBoneName } from '@pixiv/three-vrm'
 import * as THREE from 'three'
@@ -7,11 +7,14 @@ import { useAssembledVrm } from './useAssembledVrm'
 import { SHADOWED_BY_PART } from './partLoader'
 import { useAvatarStore, threeColorToHex, type MeshInfo } from '../store'
 import { labelForMaterialName } from './meshLabels'
-import { setAnimScene, updateAnimMixer } from '../components/AnimationPanel'
+import { useAnimator } from '../companion/anim/useAnimator'
+import type { StateName } from '../companion/anim/scheduler'
 
 // 에디터 조립 아바타 — 공유 조립 엔진(useAssembledVrm)에 drei 에디터 정책을 얹는다:
-// 정적 rest pose · frameUpperBody 카메라 · ShaderPanel/AnimationPanel 싱글턴 · meshInfos 색 편집.
-// composer 정책(유휴 시선/wave/더미)은 이식하지 않음. 캐릭터 전환은 상위 key={characterId} remount.
+// 정적 rest pose(프리뷰 OFF) · frameUpperBody 카메라 · meshInfos 색 편집.
+// 라이브 프리뷰(store.animPreview ON)면 컴패니언과 동일한 절차 엔진(useAnimator)을 구동 —
+// 디버그 패널 없는 에디터에서 바로 모션 확인(무드/제스처는 AnimationPanel 버튼 → window 이벤트).
+// 캐릭터 전환은 상위 key={characterId} remount.
 
 interface Props {
   baseUrl: string
@@ -21,6 +24,7 @@ interface Props {
 export function ComposerAvatar({ baseUrl, catalog }: Props) {
   const meshInfos = useAvatarStore((s) => s.meshInfos)
   const setMeshInfos = useAvatarStore((s) => s.setMeshInfos)
+  const animPreview = useAvatarStore((s) => s.animPreview)
 
   const camera = useThree((s) => s.camera)
   const controls = useThree((s) => s.controls)
@@ -28,21 +32,26 @@ export function ComposerAvatar({ baseUrl, catalog }: Props) {
   // 조립된 base 씬에서 메시 목록 재수집 → 색/셰이더 패널 갱신(seam: 파츠 add/remove 후 호출).
   const recollect = useCallback((base: VRM) => setMeshInfos(collectMeshInfos(base)), [setMeshInfos])
 
-  const { vrm, vrmRef, animations, syncFace } = useAssembledVrm(baseUrl, catalog, recollect)
+  const { vrm, vrmRef, syncFace } = useAssembledVrm(baseUrl, catalog, recollect)
 
-  // ─── 로드 시 drei 정책 주입 ────────────────────────────────────────────────
-  // 셰이더·메시 색 적용은 공유 훅(useAssembledVrm)이 담당(컴패니언과 동일 경로). 여기선 에디터 전용
-  // 정책만: rest pose · 애니 믹서 싱글턴 · meshInfos 목록 수집(색 패널 리스트용).
+  // ─── 라이브 프리뷰: 컴패니언과 동일한 절차 엔진 (idle 고정·무드 neutral; 트리거는 window 이벤트) ──
+  // useAnimator 의 useFrame 이 아래 컴포넌트 useFrame(v.update) 보다 먼저 등록돼야 함(본 기록→update 순서).
+  const stateRef = useRef<StateName>('idle')
+  const moodRef = useRef<string>('neutral')
+  useAnimator(vrmRef, stateRef, moodRef, animPreview)
+
+  // ─── 로드 시 meshInfos 목록 수집 (색 패널 리스트용) ─────────────────────────────
+  // 셰이더·메시 색 적용은 공유 훅(useAssembledVrm)이 담당(컴패니언과 동일 경로).
   useEffect(() => {
     if (!vrm) return
-    applyRestPose(vrm)
-    setAnimScene(vrm.scene, animations)
     setMeshInfos(collectMeshInfos(vrm))
-    return () => {
-      setAnimScene(null, [])
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vrm])
+
+  // ─── 정적 rest pose: 프리뷰 OFF 일 때만 (ON 이면 animator 가 본 소유). 토글 OFF 전환 시 복귀 ──
+  useEffect(() => {
+    if (vrm && !animPreview) applyRestPose(vrm)
+  }, [vrm, animPreview])
 
   // ─── 로드 시 상반신 기준 카메라/타깃 1회 세팅 (vrm·controls 양쪽 준비됐을 때) ──────────
   useEffect(() => {
@@ -68,7 +77,6 @@ export function ComposerAvatar({ baseUrl, catalog }: Props) {
     if (!v) return
     v.update(delta)
     syncFace() // update 후: base 표정 influences + 눈 lookAt 회전 → 교체된 새 Face/눈 본 미러
-    updateAnimMixer(delta)
   })
 
   if (!vrm) return null

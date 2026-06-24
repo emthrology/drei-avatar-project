@@ -45,7 +45,7 @@ drei-avatar-project/
 │   │   ├── useAssembledVrm.ts   #   ★공유 조립 훅: base 로드 + 슬롯 diff + faceRef + 외형값 적용. 에디터/컴패니언 양쪽이 사용
 │   │   ├── appearance.ts        #   applyAppearance(씬, shader, meshInfos) — 셰이더·색 머티리얼 적용(에디터·컴패니언 공유)
 │   │   ├── EditorScene.tsx      #   3-pane: 좌 캐릭터셀렉터+카탈로그 / 중앙 3D / 우 EditorPanel
-│   │   ├── ComposerAvatar.tsx   #   useAssembledVrm + 에디터 정책(restpose/프레이밍/ShaderPanel·AnimationPanel/meshInfos)
+│   │   ├── ComposerAvatar.tsx   #   useAssembledVrm + 에디터 정책(restpose/프레이밍/meshInfos) + 라이브 프리뷰 시 useAnimator 구동
 │   │   ├── partLoader.ts        #   loadPart(GLB rebind) / loadSpringPart(VRM 스프링헤어 병합) / loadFacePart(얼굴교체+눈graft+표정미러)
 │   │   ├── constants.ts         #   CHARACTERS[] (베이스별 catalog) · Selection · VARIANTS_BY_ID · BASE_SPEC(컨벤션 락)
 │   │   ├── meshLabels.ts        #   메시→부위 라벨 규칙(VRoid 머티리얼명 기반, base·파츠·성별 공통). 파츠/색상 리스트 표시용
@@ -58,7 +58,7 @@ drei-avatar-project/
 │   │   ├── ShaderPanel.tsx   # MToon 슬라이더(외곽선/툰경계) → store.shader. 적용은 공유 appearance.ts
 │   │   ├── LightPanel.tsx    # 조명 슬라이더 (환경광/메인광 강도·각도)
 │   │   ├── GradingPanel.tsx  # 톤 슬라이더 (밝기/대비/색조/채도)
-│   │   └── AnimationPanel.tsx# 내장 애니메이션 클립 목록 + 재생
+│   │   └── AnimationPanel.tsx# 에디터 라이브 프리뷰 토글(store.animPreview) + 무드/제스처/idle포즈 트리거(window 이벤트)
 │   ├── companion/
 │   │   ├── CompanionOverlay.tsx  # fixed 오버레이 (300×400, bottom-right)
 │   │   ├── CompanionAvatar.tsx   # useAssembledVrm(조립 공유) + 본기반 카메라 + 립싱크/애니/시선. 업로드는 catalog=[] 오버라이드
@@ -229,7 +229,8 @@ VRM 로드 흐름(업로드 오버라이드): 파일 선택 → `URL.createObjec
 - [x] **오프라인 파이프라인 이식 (Phase 7)** — `scripts/extractParts.mjs`(VRoid 소스→파츠 GLB/VRM raw 수술+prune) + `renderThumbs.mjs`(puppeteer로 `?thumb=` 단독 렌더 스냅샷) + `ui/ThumbScene.tsx` + `main.tsx` `?thumb=` 분기·`window.__CATALOG`. devDeps(@gltf-transform/core·functions, puppeteer) + `npm run assets`(extract→thumbs)/`extract`/`thumbs`. **extract·thumbs 둘 다 byte-deterministic 재생성 검증**. ⚠️ `prebuild` 미추가 — `parts/` 소스가 gitignore라 Vercel 빌드선 추출 불가(런타임 산출물 커밋으로 충당)
 - [ ] **후속: 무드 5단계 — 루프 톤 분기** — happy=활발한 머리/호흡, sad=느린 미동. 스케줄러 factory에 `moodName` 분기 추가 필요 (현재 루프는 전 무드 공유)
 - [ ] **후속: IK 도입** — 손이 보이는 제스처(손가슴 등) 정밀화. CCDIKSolver 채널 추상화. 상세 [docs/ik-plan.md](docs/ik-plan.md)
-- [ ] Phase 4: 애니메이션 미리보기 (내장 클립 재생), 스크린샷/내보내기
+- [x] **에디터 라이브 프리뷰** — 디버그 패널 없는 에디터에서 모션 확인. VRoid VRM엔 내장 클립이 없어 AnimationMixer 경로(빈 패널) 폐기 → 컴패니언과 동일한 절차 엔진(`useAnimator`) 재사용. `store.animPreview` 토글(기본 OFF=정적 편집 보존, 비퇴행), ON 시 ComposerAvatar가 idle 구동. AnimationPanel = 토글 + 무드/제스처/idle포즈 트리거(`companion:*` window 이벤트 공유, DebugPanel과 동일 경로). `useAnimator(…, enabled)` 4번째 인자로 게이팅
+- [ ] Phase 4: 스크린샷/내보내기 (애니메이션 미리보기는 위 라이브 프리뷰로 완료)
 - 보류: per-제스처 손가락 매핑 — 300×400 프레임에선 지엽적이라 스킵 (전역 편안한 손으로 충분)
 
 ## TalkingHead 포팅 로드맵

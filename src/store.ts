@@ -85,6 +85,11 @@ interface AvatarState {
 
   grading: GradingParams
   setGrading: (patch: Partial<GradingParams>) => void
+
+  // 에디터 라이브 프리뷰: ON 이면 ComposerAvatar 가 컴패니언과 동일한 절차 엔진(useAnimator)을
+  // 구동해 캐릭터가 움직임. 기본 OFF = 정적 rest pose(색/셰이더 편집 안정성 보존, 비퇴행).
+  animPreview: boolean
+  setAnimPreview: (on: boolean) => void
 }
 
 export const useAvatarStore = create<AvatarState>((set) => ({
@@ -123,6 +128,9 @@ export const useAvatarStore = create<AvatarState>((set) => ({
 
   grading: GRADING_DEFAULTS,
   setGrading: (patch) => set((s) => ({ grading: { ...s.grading, ...patch } })),
+
+  animPreview: false,
+  setAnimPreview: (on) => set({ animPreview: on }),
 
   meshInfos: [],
   setMeshInfos: (infos) => set({ meshInfos: infos }),
