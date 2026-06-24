@@ -11,9 +11,12 @@ import { AnimScheduler, type StateName, type AnimTemplate, type ChannelValues } 
 import { Channels, BASELINE, EMOTION_CHANNELS } from './channels'
 import { MOODS, IDLE_ARM_POSES } from './moods'
 
-// mthSurprised는 held 표정이 아니라 일회성 gasp 클립이 전담 → moodExprClip에서 제외
-// (채널 단일 소유: held 표정 vs 일회성 입벌림이 같은 채널을 안 건드리게 분리)
-const HELD_EMOTION_CHANNELS = EMOTION_CHANNELS.filter((c) => c !== 'emo.mthSurprised')
+// 일회성 클립이 전담하는 채널은 held 표정(moodExprClip)에서 제외 — 채널 단일 소유:
+// emo.mthSurprised=surprised gasp(입벌림), emo.eyeJoy=happy 진입 눈웃음(감았다 뜸).
+const ONESHOT_EMOTION_CHANNELS = ['emo.mthSurprised', 'emo.eyeJoy']
+const HELD_EMOTION_CHANNELS = EMOTION_CHANNELS.filter(
+  (c) => !ONESHOT_EMOTION_CHANNELS.includes(c),
+)
 
 // 무드 표정 전환 클립: held 감정 채널을 명시(활성=target, 나머지=0) → hold-last로 교체.
 // factory 선두 null이 현재값→target 부드러운 ramp 보장. ease 3 = 완만.
@@ -33,6 +36,15 @@ const SURPRISE_GASP: AnimTemplate = {
   ease: 2,
   dt: [[120, 180], [200, 320], [450, 650]],
   vs: { 'emo.mthSurprised': [0.75, 0.75, 0] },
+}
+
+// happy 눈웃음: happy 진입 시 눈을 살짝 감았다(웃는 눈^_^) 뜬다 — held 아님이라 발화 중 눈뜸 유지.
+// emo.eyeJoy → Fcl_EYE_Joy + EYE_Close boost(channels). surprised gasp와 동형(상승·유지·하강).
+const HAPPY_EYE: AnimTemplate = {
+  name: 'happyeye',
+  ease: 2,
+  dt: [[150, 200], [300, 450], [400, 600]],
+  vs: { 'emo.eyeJoy': [1, 1, 0] },
 }
 
 // enabled=false: tick 을 돌리지 않음(에디터 프리뷰 토글 OFF). 본/표정은 호출부가 소유
@@ -124,6 +136,11 @@ export function useAnimator(
       if (nextMood === 'surprised') {
         scheduler.remove('gasp')
         scheduler.add(SURPRISE_GASP, false)
+      }
+      // happy 진입: 눈웃음 일회성 발동 (held 눈 대신 → 감았다 떠서 발화 중 눈뜸 유지)
+      if (nextMood === 'happy') {
+        scheduler.remove('happyeye')
+        scheduler.add(HAPPY_EYE, false)
       }
       activeMoodRef.current = nextMood
     }
