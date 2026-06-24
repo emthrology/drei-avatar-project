@@ -35,10 +35,13 @@ const SURPRISE_GASP: AnimTemplate = {
   vs: { 'emo.mthSurprised': [0.75, 0.75, 0] },
 }
 
+// enabled=false: tick 을 돌리지 않음(에디터 프리뷰 토글 OFF). 본/표정은 호출부가 소유
+// (ComposerAvatar 가 rest pose 복원) → 재활성 시 깨끗이 재구성되도록 builtVrm 을 비운다.
 export function useAnimator(
   vrmRef: React.RefObject<VRM | null>,
   stateRef: React.RefObject<StateName>,
   moodRef: React.RefObject<string>,
+  enabled = true,
 ) {
   const schedulerRef = useRef<AnimScheduler | null>(null)
   const channelsRef = useRef<Channels | null>(null)
@@ -78,6 +81,10 @@ export function useAnimator(
   }, [])
 
   useFrame((_, delta) => {
+    if (!enabled) {
+      builtVrmRef.current = null // 재활성 시 BASELINE 부터 깨끗이 재구성
+      return
+    }
     const vrm = vrmRef.current
     if (!vrm?.humanoid) return
 
