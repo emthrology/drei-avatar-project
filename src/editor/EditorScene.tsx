@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls, ContactShadows } from '@react-three/drei'
+import { OrbitControls, ContactShadows, Html, useProgress } from '@react-three/drei'
 import { ComposerAvatar } from './ComposerAvatar'
 import { CatalogPicker } from './ui/CatalogPicker'
 import { SceneLights } from '../components/SceneLights'
@@ -11,12 +11,16 @@ import { CHARACTERS, getCharacter } from './constants'
 
 // 에디터 = 조립(authored base + 모듈 파츠). composer식 좌측 전용 패널(캐릭터 셀렉터 + 카탈로그
 // 피커) + 중앙 3D(drei 정책: SceneLights/GradingEffects/ContactShadows) + 우측 공유 설정 패널.
-function FallbackBox() {
+// VRM 로딩 중 진행률 표시 (12MB급이라 회색 박스보다 체감 개선). useProgress는 Suspense 트리거
+// 리소스(useGLTF 등) 전역 카운트라 base+파츠 전체 로딩을 % 로 반영.
+function LoadingIndicator() {
+  const { progress } = useProgress()
   return (
-    <mesh>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color="#888" />
-    </mesh>
+    <Html center>
+      <div className="whitespace-nowrap rounded bg-gray-900/80 px-3 py-1.5 text-xs text-gray-300">
+        로딩 중... {Math.round(progress)}%
+      </div>
+    </Html>
   )
 }
 
@@ -65,7 +69,7 @@ export function EditorScene() {
         <Canvas camera={{ position: [0, 1.4, 2.5], fov: 35 }} shadows gl={{ antialias: true }}>
           <color attach="background" args={['#1a1a2e']} />
           <SceneLights castShadow />
-          <Suspense fallback={<FallbackBox />}>
+          <Suspense fallback={<LoadingIndicator />}>
             <ComposerAvatar key={characterId} baseUrl={character.baseUrl} catalog={character.catalog} />
             <ContactShadows position={[0, -0.01, 0]} opacity={0.4} scale={4} blur={2} />
           </Suspense>
