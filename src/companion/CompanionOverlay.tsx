@@ -1,6 +1,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { useThree } from '@react-three/fiber'
+import { PerformanceMonitor, type PerformanceMonitorApi } from '@react-three/drei'
 import { useGameEvents } from './useGameEvents'
 import { CompanionAvatar, type CameraSettings } from './CompanionAvatar'
 import { googleTTS, type SpeakPayload } from './tts'
@@ -28,6 +29,20 @@ function CameraRig({ settings }: { settings: CameraSettings }) {
     camera.lookAt(...settings.target)
   }, [settings, camera])
   return null
+}
+
+// 컴패니언은 게임 위 오버레이 — 게임이 무거우면 이 캔버스가 FPS를 더 잠식.
+// PerformanceMonitor(FPS 측정)를 직접 setDpr에 연결(drei의 <AdaptiveDpr>는 R3F
+// performance.regress()에 반응하는데, 이 캔버스는 OrbitControls가 없어 regress를
+// 아무도 안 불러 무동작 — 그래서 여기선 콜백에서 직접 dpr을 낮춤/복원).
+function DprGovernor() {
+  const setDpr = useThree((s) => s.setDpr)
+  const initialDpr = useThree((s) => s.viewport.initialDpr)
+  const handleChange = useCallback(
+    (api: PerformanceMonitorApi) => setDpr(Math.max(1, initialDpr * api.factor)),
+    [setDpr, initialDpr],
+  )
+  return <PerformanceMonitor onIncline={handleChange} onDecline={handleChange} />
 }
 
 export function CompanionOverlay({ uploadUrl, lang, gender, onStatusChange, onSpeak }: Props) {
@@ -96,6 +111,9 @@ export function CompanionOverlay({ uploadUrl, lang, gender, onStatusChange, onSp
         gl={{ antialias: true, alpha: true }}
         style={{ background: 'transparent' }}
       >
+        {/* 게임 위 오버레이 FPS 보호 — 하락 감지 시 DPR 강하, 회복 시 복원 */}
+        <DprGovernor />
+
         {/* 에디터와 공유 조명 (store.lighting) — 에디터에서 조절하면 컴패니언도 반영 */}
         <SceneLights />
 

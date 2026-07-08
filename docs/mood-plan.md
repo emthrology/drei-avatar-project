@@ -1,10 +1,10 @@
 # 무드 시스템 확장 계획
 
-## 진행 상태: 1~4단계 완료 ✅ (5단계 미착수)
+## 진행 상태: 1~5단계 완료 ✅
 
 - ✅ 1단계 감정 채널 인프라 / ✅ 2단계 무드 정의+표정 전환 / ✅ 3단계 이벤트 매핑+배선 / ✅ 4단계 제스처 톤
 - 추가 폴리싱: sad/angry 눈썹 모프 변별, surprised 입벌림 gasp, TTS 성별 음성 선택
-- ⏳ 5단계 루프 톤 분기(`moodName`)는 의도적 보류 — 아래 "향후" 참조
+- ✅ 5단계 루프 톤 분기 — 아래 "향후" 절 참조(실제 구현은 계획과 세부 방식이 다름: 스케줄러에 `moodName`을 넣는 대신 `moods.ts`가 템플릿을 무드별로 스케일해 재조립)
 
 ## 목표
 
@@ -98,6 +98,12 @@ EVENT_MOODS: Record<GameEventType, MoodName> = {
 - **무드 전환 타이밍**: 발화 시작 시 무드 설정 + 제스처 발동이 같은 프레임 → 표정 ramp(400ms)와 제스처가 겹쳐도 채널 분리(emo.* vs 본)라 충돌 없음. 시각만 확인
 - **decay 시점**: 발화 종료 timeout이 무드를 neutral로 → 표정이 말풍선보다 약간 더 머물도록 delay 여유 줄지 검토
 
-## 향후 (5단계, 이번 범위 외)
+## 5단계 — 루프 톤 무드 분기 (완료)
 
-- 루프 톤 무드 분기: happy=활발한 머리/호흡, sad=느린 미동. 템플릿 `moodName` 분기 (factory 확장 필요)
+- 목표: happy=활발한 머리/호흡, sad=느린 미동
+- **실제 구현은 이 문서의 원안(스케줄러 factory에 `moodName` 분기 추가)과 다름** — 더 저위험인 "템플릿 스케일" 방식 채택:
+  - `moods.ts`에 `scaleTemplate(template, {tempo, amplitude})` 재귀 유틸 추가. `dt`/`delay`는 tempo로, `vs`(진폭)는 amplitude로 스케일하며 `alt`/`idle`/`speaking` 서브템플릿까지 재귀 순회
+  - `MOOD_TONE`: `happy={tempo:0.7, amplitude:1.2}`, `sad={tempo:1.6, amplitude:0.55}`. 나머지(neutral/surprised/angry)는 `{1,1}` — `scaleTemplate`이 `tone={1,1}`이면 원본 객체를 그대로 반환(참조 동일성 유지)해 비퇴행 보장
+  - 분기 대상은 `breathing`/`head`/`pose` 3종만(`TONE_LOOP_NAMES`로 export). `armPose`/`blink`는 무드 무관 공유 유지 — armPose는 제스처가 별도 소유하는 채널이라 톤 분기 실익이 적고, blink는 이번 범위 밖으로 명시적으로 남김
+  - `useAnimator.ts`의 무드 전환 블록에서 `TONE_LOOP_NAMES` 3종을 `scheduler.remove()` 후 새 무드의 스케일판을 `scheduler.add(..., true)`로 재등록. 스케줄러의 hold-last(현재값에서 이어받음)가 전환 시 시각적 스냅을 막아줌 — 스케줄러 자체는 무드를 전혀 모른 채 그대로 재사용
+- 튜닝 수치(tempo/amplitude)는 1차 추정값 — 실제 체감은 브라우저에서 시각 확인 필요(이 프로젝트 관례상 모션 자연스러움은 수동 검증 영역, `testing-strategy.md`)
