@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react'
 import { type Lang, type Gender } from './locales'
-import { MOODS, IDLE_ARM_POSES } from './anim/moods'
+import { MOODS, IDLE_POSES } from './anim/moods'
 
 // 제스처 라벨 목록 (수동 트리거 버튼용). 인덱스가 MOODS.neutral.gestures와 일치
 const GESTURE_LABELS = MOODS.neutral.gestures.map((g, i) => g.label ?? `제스처 ${i}`)
 
-// idle 팔 포즈 라벨 (수동 트리거). 인덱스가 IDLE_ARM_POSES와 일치
-const IDLE_POSE_LABELS = IDLE_ARM_POSES.map((p, i) => p.label ?? `포즈 ${i}`)
+// idle 포즈 라벨 (수동 트리거, 팔 + 몸통 둘러보기). 인덱스가 IDLE_POSES와 일치
+const IDLE_POSE_LABELS = IDLE_POSES.map((p, i) => p.label ?? `포즈 ${i}`)
 
 // 무드 목록 (표정 트리거 버튼용). MOODS 키 순서 = neutral/happy/sad/surprised/angry
 const MOOD_NAMES = Object.keys(MOODS)
@@ -22,6 +22,11 @@ function triggerMood(mood: string) {
 function triggerIdlePose(index: number) {
   window.dispatchEvent(new CustomEvent('companion:idlepose', { detail: { index } }))
 }
+
+// ⏸️ 손인사 보류 (재개 시 복구 — docs/wave-gesture-attempts.md):
+// function triggerWave() {
+//   window.dispatchEvent(new CustomEvent('companion:wave'))
+// }
 
 interface Props {
   status: 'loading' | 'ready' | 'speaking'
@@ -209,6 +214,7 @@ export function DebugPanel({ status, lastText, lang, gender, onEvent, onLangChan
       <hr style={{ border: 'none', borderTop: '1px solid #333', margin: '8px 0' }} />
 
       {/* 제스처 수동 트리거 */}
+      {/* ⏸️ 손인사 버튼 보류 (재개 시 복구 — docs/wave-gesture-attempts.md) */}
       <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>Gestures</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {GESTURE_LABELS.map((label, i) => (

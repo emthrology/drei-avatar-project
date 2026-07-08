@@ -25,7 +25,7 @@ const head: AnimTemplate = {
       {
         name: 'head',
         p: 0.7,
-        delay: [0, 800],
+        delay: [0, 400],
         dt: [[1000, 4000]],
         vs: {
           'head.rotateX': [[-0.03, 0.05]],
@@ -36,7 +36,7 @@ const head: AnimTemplate = {
       // 가끔 크게 둘러보기 — 머리를 확 돌렸다 hold-last로 잠시 유지
       {
         name: 'head',
-        delay: [600, 2200],
+        delay: [400, 1200],
         dt: [[700, 1500]],
         vs: {
           'head.rotateY': [[-0.22, 0.22]],
@@ -57,63 +57,72 @@ const head: AnimTemplate = {
   },
 };
 
+// 크게 비틀어 둘러보기 (좌/우) — Spine 큰 턴, 머리는 FK 상속. pose 루프 alt로 등장(p 0.3씩)
+// + 디버그 트리거용으로 export(IDLE_POSES에 합류). 값 단일 소스라 루프/디버그가 동일 정의 공유.
+export const IDLE_SPINE_POSES: AnimTemplate[] = [
+  {
+    name: 'pose',
+    label: '둘러보기L',
+    p: 0.3,
+    delay: [1500, 3500],
+    dt: [[1600, 2400]],
+    vs: { 'spine.x': [0.02], 'spine.y': [0.35], 'spine.z': [-0.05] },
+  },
+  {
+    name: 'pose',
+    label: '둘러보기R',
+    p: 0.3,
+    delay: [1500, 3500],
+    dt: [[1600, 2400]],
+    vs: { 'spine.x': [0.02], 'spine.y': [-0.35], 'spine.z': [0.05] },
+  },
+];
+
 // 포즈: 6종 상반신 체중이동을 랜덤 전환. Spine 회전(Head/팔/Chest는 FK 상속 → 전신 흔들림).
-// 기존보다 진폭 크고 다양하며 더 자주 전환(3~10초) → 적극적인 idle. dt=전환 이징(gaussian).
+// 기존보다 진폭 크고 다양하며 더 자주 전환(~2~6초) → 적극적인 idle. dt=전환 이징(gaussian).
+// delay만 축소(주기↓), dt(전환 부드러움)·진폭은 유지.
 const pose: AnimTemplate = {
   name: 'pose',
   loop: true,
   alt: [
     {
       name: 'pose',
-      delay: [4000, 10000],
+      delay: [2000, 5000],
       dt: [[1400, 2400]],
       vs: { 'spine.x': [0.0], 'spine.y': [0.06], 'spine.z': [0.05] },
     },
     {
       name: 'pose',
-      delay: [4000, 10000],
+      delay: [2000, 5000],
       dt: [[1400, 2400]],
       vs: { 'spine.x': [0.03], 'spine.y': [-0.08], 'spine.z': [-0.06] },
     },
     {
       name: 'pose',
-      delay: [4000, 10000],
+      delay: [2000, 5000],
       dt: [[1400, 2400]],
       vs: { 'spine.x': [-0.02], 'spine.y': [0.1], 'spine.z': [0.04] },
     },
     {
       name: 'pose',
-      delay: [4000, 9000],
+      delay: [2000, 4500],
       dt: [[1200, 2200]],
       vs: { 'spine.x': [0.05], 'spine.y': [0.0], 'spine.z': [-0.03] },
     },
     {
       name: 'pose',
-      delay: [3000, 8000],
+      delay: [1500, 4000],
       dt: [[1000, 1800]],
       vs: { 'spine.x': [0.0], 'spine.y': [0.13], 'spine.z': [-0.04] },
     },
     {
       name: 'pose',
-      delay: [3000, 8000],
+      delay: [1500, 4000],
       dt: [[1000, 1800]],
       vs: { 'spine.x': [0.01], 'spine.y': [-0.12], 'spine.z': [0.06] },
     },
-    // 크게 비틀어 둘러보기 (좌/우) — Spine 큰 턴, 머리는 FK 상속. 빈도 ↑ (p 0.15씩=0.30)
-    {
-      name: 'pose',
-      p: 0.15,
-      delay: [3000, 7000],
-      dt: [[1600, 2400]],
-      vs: { 'spine.x': [0.02], 'spine.y': [0.35], 'spine.z': [-0.05] },
-    },
-    {
-      name: 'pose',
-      p: 0.15,
-      delay: [3000, 7000],
-      dt: [[1600, 2400]],
-      vs: { 'spine.x': [0.02], 'spine.y': [-0.35], 'spine.z': [0.05] },
-    },
+    // 크게 비틀어 둘러보기 (좌/우) — 위 IDLE_SPINE_POSES 참조 (루프/디버그 단일 소스)
+    ...IDLE_SPINE_POSES,
   ],
 };
 
@@ -139,8 +148,8 @@ const blink: AnimTemplate = {
 };
 
 // ── idle 팔 포즈 (FK) ──────────────────────────────────────
-// 차렷 고정이던 팔에 생활감 부여. armPose 루프가 idle 중 랜덤 전환(대부분 차렷+미세이동,
-// 가끔 허리짚기/뒷짐). 발화 중(speaking)엔 rest로 양보 → 제스처가 팔 채널 소유(큐 후순위 승).
+// 차렷 고정이던 팔에 생활감 부여. armPose 루프가 idle 중 랜덤 전환(차렷 55% + 변형 자세 45%:
+// 허리짚기·뒷짐·앞으로모으기). 발화 중(speaking)엔 rest로 양보 → 제스처가 팔 채널 소유.
 // 손끝 정밀도는 작은 오버레이서 안 보여 FK 근사로 충분(손가슴과 동일). 검증축: arm.z(들기),
 // arm.x(±=앞뒤, 음수=앞), elbow.z(굽힘 좌− / 우+). 각 포즈는 양팔 전 채널 명시(잔상 방지).
 //
@@ -151,7 +160,7 @@ export const IDLE_ARM_POSES: AnimTemplate[] = [
     label: '허리짚기L',
     p: 0.05, // 빈도 낮춤 (가끔만)
     ease: 2.8,
-    delay: [4000, 9000],
+    delay: [2500, 5500],
     dt: [[800, 1300]],
     vs: {
       'armL.z': [-1.02],
@@ -167,7 +176,7 @@ export const IDLE_ARM_POSES: AnimTemplate[] = [
     label: '허리짚기R',
     p: 0.05, // 빈도 낮춤 (가끔만)
     ease: 2.8,
-    delay: [4000, 9000],
+    delay: [2500, 5500],
     dt: [[800, 1300]],
     vs: {
       'armR.z': [1.02],
@@ -181,8 +190,9 @@ export const IDLE_ARM_POSES: AnimTemplate[] = [
   {
     name: 'armPose',
     label: '뒷짐',
+    p: 0.15,
     ease: 2.8,
-    delay: [4500, 9500],
+    delay: [2800, 6000],
     dt: [[900, 1400]],
     vs: {
       'armL.x': [0.26],
@@ -193,14 +203,43 @@ export const IDLE_ARM_POSES: AnimTemplate[] = [
       'armR.z': [1.28],
     },
   },
+  // ── 비대칭/변형 안정 자세 (차렷 탈피) ──────────────────────
+  // 앞으로모으기: 양손을 몸 앞 하단(≈허리 높이)에 느슨히 모아 맞잡은 자세. 사회자·안내원이
+  // 공손히 서 있을 때처럼. 양 상완을 앞으로 조금(x−) + 팔꿈치 중간 굽힘(z ∓0.7 ≈40°)으로
+  // 양손이 몸 중앙 앞에서 만남. 몸을 가로지르지 않아(팔짱/한손잡기와 달리) 클리핑 적음.
+  {
+    name: 'armPose',
+    label: '앞으로모으기',
+    // p 생략 → 나머지 확률 흡수 (pickAlt 마지막)
+    ease: 2.8,
+    delay: [3000, 6500],
+    dt: [[1000, 1600]],
+    vs: {
+      'armL.z': [-1.2],
+      'armL.x': [-0.28],
+      'elbowL.z': [-0.7],
+      'armR.z': [1.2],
+      'armR.x': [-0.28],
+      'elbowR.z': [0.7],
+    },
+  },
+];
+
+// 디버그 idle 포즈 트리거 목록 (팔 포즈 + 몸통 둘러보기). useAnimator/DebugPanel이 인덱스 공유.
+// 팔=armPose 루프, 몸통=pose 루프 소속이라 주입 시 각자 소속 루프를 per-channel 후순위로 눌러 이김.
+export const IDLE_POSES: AnimTemplate[] = [
+  ...IDLE_ARM_POSES,
+  ...IDLE_SPINE_POSES,
 ];
 
 // 차렷+미세 무게이동 (높은 확률, 길게 유지) — armL/R.z 작은 gaussian으로 상시 미동
 const armRelaxed: AnimTemplate = {
   name: 'armPose',
-  p: 0.72, // 차렷+미세이동 비중 ↑ (허리짚기 빈도 낮춤). 나머지: 허리짚기L/R 0.05, 뒷짐 ~0.18
+  // 차렷 55% (지배 완화 — 나머지 45%: 허리짚기L/R 0.05, 뒷짐 0.15, 앞으로모으기 잔여 0.2).
+  // micro-drift가 차렷도 미세 흔들어 정지 아님.
+  p: 0.55,
   ease: 3,
-  delay: [3000, 7000],
+  delay: [1800, 4000],
   dt: [[1400, 2200]],
   vs: {
     'armL.z': [[-1.33, -1.27]],
@@ -410,6 +449,33 @@ const GESTURES: AnimTemplate[] = [
   },
 ];
 
+// ⏸️ 손인사(안녕 wave) — 보류(2026-07-08). FK 단일 본 커플링으로 자연스러운 좌우 흔들기 실패.
+// 시도 이력·실패 원인·재개 방향은 docs/wave-gesture-attempts.md. 마지막 시도값 보존(재개 시 해제).
+// 재개 권장: 손목(RightHand) 본으로 흔들기(팔은 정적, 손만 flick) → 커플링 회피.
+/*
+export const WAVE: AnimTemplate = {
+  name: 'wave',
+  ease: 2,
+  //     raise      →+        →-        →+        →-        hold      lower
+  dt: [
+    [300, 380],
+    [180, 240],
+    [180, 240],
+    [180, 240],
+    [180, 240],
+    [180, 260],
+    [500, 650],
+  ],
+  vs: {
+    'armR.z': [1.15, 1.15, 1.15, 1.15, 1.15, 1.15, 1.3], // 상완 거의 내림(옆 벌림 최소) → rest
+    'armR.x': [-0.45, -0.45, -0.45, -0.45, -0.45, -0.45, 0], // 앞으로 스윙(손이 정면·몸 앞에서 올라옴)
+    'elbowR.z': [3.3, 3.3, 3.3, 3.3, 3.3, 3.3, 0], // 하완 세움(고정) — 접힘면이 앞이라 흔들기는 armR.y 담당
+    'armR.y': [-1.0, -0.75, -1.25, -0.75, -1.25, -1.0, 0], // 접힘면 앞배치(중심 -1.0) + 좌우 흔들기(±0.25)
+    'head.gz': [0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0], // 친근한 고개 기울임
+  },
+};
+*/
+
 // ── 무드별 제스처 톤 ─────────────────────────────────────
 // neutral은 위 GESTURES 10종. 나머지 무드는 톤을 달리한 curated 세트.
 //   happy=경쾌(ease↓·진폭↑·빠름) / sad=느림·처짐(ease↑·고개 숙임) /
@@ -589,7 +655,10 @@ export interface Mood {
 // ── 루프 톤 분기 (5단계) ─────────────────────────────────
 // 호흡/머리/포즈는 무드별로 템포(전환 주기)·진폭(움직임 크기)을 스케일. armPose/blink는
 // 무드 무관 공유 유지(팔은 제스처가 별도 소유, 깜빡임은 이번 범위 밖 — mood-plan.md 5단계).
-interface LoopTone { tempo: number; amplitude: number } // tempo<1=빠름, amplitude=움직임 배율
+interface LoopTone {
+  tempo: number;
+  amplitude: number;
+} // tempo<1=빠름, amplitude=움직임 배율
 const DEFAULT_TONE: LoopTone = { tempo: 1, amplitude: 1 }; // neutral/surprised/angry — 스케일 무연산
 const MOOD_TONE: Record<string, LoopTone> = {
   happy: { tempo: 0.7, amplitude: 1.2 }, // 30% 빠르게 · 20% 크게 — 활발한 머리/호흡
@@ -599,7 +668,9 @@ const MOOD_TONE: Record<string, LoopTone> = {
 function scaleRanged(x: Ranged, factor: number): Ranged {
   if (!Array.isArray(x)) return x * factor;
   const [min, max, skew, samples] = x;
-  return skew === undefined ? [min * factor, max * factor] : [min * factor, max * factor, skew, samples];
+  return skew === undefined
+    ? [min * factor, max * factor]
+    : [min * factor, max * factor, skew, samples];
 }
 
 // dt/delay는 tempo로, vs(진폭)는 amplitude로 스케일. alt/idle/speaking 재귀 순회.
@@ -612,7 +683,9 @@ function scaleTemplate(t: AnimTemplate, tone: LoopTone): AnimTemplate {
   if (t.vs) {
     const vs: ChannelValues = {};
     for (const [ch, arr] of Object.entries(t.vs)) {
-      vs[ch] = arr.map((v) => (v === null ? null : scaleRanged(v, tone.amplitude)));
+      vs[ch] = arr.map((v) =>
+        v === null ? null : scaleRanged(v, tone.amplitude),
+      );
     }
     out.vs = vs;
   }
@@ -628,7 +701,13 @@ export const TONE_LOOP_NAMES = ['breathing', 'head', 'pose'];
 
 function loopsForMood(moodName: string): AnimTemplate[] {
   const tone = MOOD_TONE[moodName] ?? DEFAULT_TONE;
-  return [scaleTemplate(breathing, tone), scaleTemplate(head, tone), scaleTemplate(pose, tone), armPose, blink];
+  return [
+    scaleTemplate(breathing, tone),
+    scaleTemplate(head, tone),
+    scaleTemplate(pose, tone),
+    armPose,
+    blink,
+  ];
 }
 
 export const MOODS: Record<string, Mood> = {

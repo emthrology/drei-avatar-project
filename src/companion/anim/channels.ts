@@ -65,6 +65,27 @@ export const BASELINE: Record<string, number> = {
 // chest.inhale(0~1) → 가슴 본 X회전 스케일 (기존 useIdleAnimation 0.015 진폭 보존)
 const CHEST_INHALE_SCALE = 0.03;
 
+// idle micro-drift (2번): hold(제스처 정지·포즈 유지) 구간에도 팔·몸통이 미세하게 살아있도록
+// 최종 회전에 초저주파 sine을 상시 가산. apply-레이어라 스케줄러 채널 단일 소유와 무관하고,
+// state 맵은 비훼손(tick 반환=scheduler.live 참조 → mutate 금지, euler 로컬에만 더함).
+// 활성 모션 땐 진폭에 묻히고 hold 때만 보임 → hold 감지 불필요. 머리(이미 미동)·얼굴(표정 동기)·
+// 호흡(chest.inhale, 이미 진동)은 제외. 서로 안 맞아떨어지는 주기(≈5~12s)로 반복감 제거.
+// DRIFT_AMP=0이면 완전 무영향(비퇴행). 진폭은 육안 튜닝값.
+const DRIFT_AMP = 1; // 전역 배율 (0=off)
+const DRIFT: Record<string, [number, number, number]> = {
+  // 채널: [주파수 rad/s, 위상, 진폭 rad(≈0.3~0.5°)]
+  'spine.y': [0.53, 0.0, 0.008],
+  'spine.z': [0.61, 2.1, 0.007],
+  'chest.leanX': [0.71, 1.0, 0.005],
+  'chest.leanZ': [0.83, 3.0, 0.005],
+  'armL.z': [0.67, 0.4, 0.008],
+  'armR.z': [0.73, 2.9, 0.008],
+  'armL.x': [0.97, 0.5, 0.006],
+  'armR.x': [1.03, 3.6, 0.006],
+  'elbowL.z': [1.09, 1.2, 0.005],
+  'elbowR.z': [1.19, 4.0, 0.005],
+};
+
 // happy 눈감김 목표 비율(완전감김 Fcl_EYE_Close 대비). male 실측 ~0.64 → boost 0(비퇴행)
 const HAPPY_EYE_TARGET = 0.62;
 
@@ -245,12 +266,17 @@ export class Channels {
     }
   }
 
-  // 스케줄러 출력 상태맵을 VRM에 기록
-  apply(state: Record<string, number>): void {
+  // 스케줄러 출력 상태맵을 VRM에 기록. t=누적 시간(초) — idle micro-drift 위상용(0=drift 없음).
+  apply(state: Record<string, number>, t = 0): void {
     const v = (k: string) => state[k] ?? BASELINE[k] ?? 0;
+    // micro-drift: 채널별 초저주파 sine (state 비훼손 — euler 로컬에만 가산). DRIFT_AMP=0이면 0.
+    const d = (k: string) => {
+      const c = DRIFT[k];
+      return c ? Math.sin(t * c[0] + c[1]) * c[2] * DRIFT_AMP : 0;
+    };
 
     if (this.head) {
-      // idle 미동(rotate) + 제스처(g) 합성 — base+delta
+      // idle 미동(rotate) + 제스처(g) 합성 — base+delta (머리는 이미 미동 → drift 제외)
       this._euler.set(
         v('head.rotateX') + v('head.gx'),
         v('head.rotateY') + v('head.gy'),
@@ -259,32 +285,52 @@ export class Channels {
       this.head.quaternion.setFromEuler(this._euler);
     }
     if (this.spine) {
-      this._euler.set(v('spine.x'), v('spine.y'), v('spine.z'));
+      this._euler.set(
+        v('spine.x'),
+        v('spine.y') + d('spine.y'),
+        v('spine.z') + d('spine.z'),
+      );
       this.spine.quaternion.setFromEuler(this._euler);
     }
     if (this.chest && this.chest !== this.spine) {
       // x=호흡+제스처린(앞뒤), y=제스처턴, z=제스처린(좌우) — 한 본에 합성
       this._euler.set(
-        v('chest.inhale') * CHEST_INHALE_SCALE + v('chest.leanX'),
+        v('chest.inhale') * CHEST_INHALE_SCALE + v('chest.leanX') + d('chest.leanX'),
         v('chest.turnY'),
-        v('chest.leanZ'),
+        v('chest.leanZ') + d('chest.leanZ'),
       );
       this.chest.quaternion.setFromEuler(this._euler);
     }
     if (this.armL) {
-      this._euler.set(v('armL.x'), v('armL.y'), v('armL.z'));
+      this._euler.set(
+        v('armL.x') + d('armL.x'),
+        v('armL.y'),
+        v('armL.z') + d('armL.z'),
+      );
       this.armL.quaternion.setFromEuler(this._euler);
     }
     if (this.armR) {
-      this._euler.set(v('armR.x'), v('armR.y'), v('armR.z'));
+      this._euler.set(
+        v('armR.x') + d('armR.x'),
+        v('armR.y'),
+        v('armR.z') + d('armR.z'),
+      );
       this.armR.quaternion.setFromEuler(this._euler);
     }
     if (this.elbowL) {
-      this._euler.set(v('elbowL.x'), v('elbowL.y'), v('elbowL.z'));
+      this._euler.set(
+        v('elbowL.x'),
+        v('elbowL.y'),
+        v('elbowL.z') + d('elbowL.z'),
+      );
       this.elbowL.quaternion.setFromEuler(this._euler);
     }
     if (this.elbowR) {
-      this._euler.set(v('elbowR.x'), v('elbowR.y'), v('elbowR.z'));
+      this._euler.set(
+        v('elbowR.x'),
+        v('elbowR.y'),
+        v('elbowR.z') + d('elbowR.z'),
+      );
       this.elbowR.quaternion.setFromEuler(this._euler);
     }
 

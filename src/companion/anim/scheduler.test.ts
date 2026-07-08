@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AnimScheduler, gaussianRandom, sigmoidFactory, type AnimTemplate } from './scheduler'
+import {
+  AnimScheduler,
+  gaussianRandom,
+  sigmoidFactory,
+  smootherstep,
+  type AnimTemplate,
+} from './scheduler'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -107,5 +113,83 @@ describe('AnimScheduler — 불변식 characterization', () => {
     expect(s.has('g')).toBe(true)
     s.remove('g')
     expect(s.has('g')).toBe(false)
+  })
+
+  it('비퇴행: motion 기본값(off)이면 config 미지정과 동일', () => {
+    const clip: AnimTemplate = { name: 't', ease: 2.5, dt: [100], vs: { a: [1] } }
+    const off = new AnimScheduler(baseline)
+    const explicit = new AnimScheduler(baseline, { overlap: 0, smooth: 0 })
+    off.add(clip, false)
+    explicit.add(structuredClone(clip), false)
+    for (const dt of [0, 25, 25, 25, 25]) {
+      expect(off.tick(dt).a).toBeCloseTo(explicit.tick(dt).a, 12)
+    }
+  })
+})
+
+describe('smootherstep', () => {
+  it('고정점: f(0)=0, f(0.5)=0.5, f(1)=1', () => {
+    expect(smootherstep(0)).toBeCloseTo(0, 6)
+    expect(smootherstep(0.5)).toBeCloseTo(0.5, 6)
+    expect(smootherstep(1)).toBeCloseTo(1, 6)
+  })
+
+  it('단조 증가 + 오버슈트 없음 (항상 [0,1])', () => {
+    let prev = -Infinity
+    for (let t = 0; t <= 1; t += 0.05) {
+      const v = smootherstep(t)
+      expect(v).toBeGreaterThanOrEqual(prev)
+      expect(v).toBeGreaterThanOrEqual(0)
+      expect(v).toBeLessThanOrEqual(1)
+      prev = v
+    }
+  })
+
+  it('양 끝이 완만 (끝단 기울기가 중앙보다 작음)', () => {
+    const e = 1e-4
+    const slopeStart = (smootherstep(e) - smootherstep(0)) / e
+    const slopeMid = (smootherstep(0.5 + e) - smootherstep(0.5)) / e
+    expect(slopeStart).toBeLessThan(slopeMid) // 출발이 부드러움
+  })
+})
+
+describe('AnimScheduler — 자연스러움 레이어 (overlap/smooth)', () => {
+  it('overlap: 깊은 채널(elbow)이 몸통 채널(chest)보다 늦게 시작', () => {
+    const s = new AnimScheduler(
+      { 'chest.leanX': 0, 'elbowL.z': 0 },
+      { overlap: 100, smooth: 0 },
+    )
+    // chest depth 0(지연 0), elbow depth 2 → 오프셋 200ms
+    s.add({ name: 'g', dt: [100], vs: { 'chest.leanX': [1], 'elbowL.z': [1] } }, false)
+    const r = s.tick(50)
+    expect(r['chest.leanX']).toBeCloseTo(0.5, 6) // 몸통은 진행(sigmoid 중앙)
+    expect(r['elbowL.z']).toBe(0) // 손은 아직 시작 전(et=-150) → live 유지
+  })
+
+  it('overlap: maxOffset만큼 클립 수명 연장 → 늦은 채널도 목표 도달', () => {
+    const s = new AnimScheduler(
+      { 'chest.leanX': 0, 'elbowL.z': 0 },
+      { overlap: 100, smooth: 0 },
+    )
+    s.add({ name: 'g', dt: [100], vs: { 'chest.leanX': [1], 'elbowL.z': [1] } }, false)
+    // 몸통 완료(100ms) 후에도 elbow 오프셋(200) 때문에 클립 유지 → 300ms에서 elbow=1
+    for (let k = 0; k < 6; k++) s.tick(50) // 총 300ms
+    expect(s.has('g')).toBe(false) // 300 >= ts_last(100)+maxOffset(200) → 제거됨
+    const r = s.tick(10)
+    expect(r['elbowL.z']).toBe(1) // hold-last: 늦은 채널도 목표 도달 후 유지
+  })
+
+  it('smooth: 본 채널이 오버슈트 없이 단조 정착 (목표 초과 없음)', () => {
+    const s = new AnimScheduler({ 'armL.z': 0 }, { overlap: 0, smooth: 1 })
+    s.add({ name: 'g', ease: 2.5, dt: [100], vs: { 'armL.z': [1] } }, false)
+    let prev = -Infinity
+    let maxV = -Infinity
+    for (let k = 0; k < 10; k++) {
+      const v = s.tick(10)['armL.z']
+      expect(v).toBeGreaterThanOrEqual(prev - 1e-9) // 단조 (되돌아옴/스냅 없음)
+      prev = v
+      maxV = Math.max(maxV, v)
+    }
+    expect(maxV).toBeLessThanOrEqual(1 + 1e-9) // 목표 초과(오버슈트) 없음
   })
 })
