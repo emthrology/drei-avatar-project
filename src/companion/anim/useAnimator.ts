@@ -9,7 +9,7 @@ import { useFrame } from '@react-three/fiber'
 import { VRM } from '@pixiv/three-vrm'
 import { AnimScheduler, type StateName, type AnimTemplate, type ChannelValues } from './scheduler'
 import { Channels, BASELINE, EMOTION_CHANNELS } from './channels'
-import { MOODS, IDLE_ARM_POSES } from './moods'
+import { MOODS, IDLE_ARM_POSES, TONE_LOOP_NAMES } from './moods'
 
 // 일회성 클립이 전담하는 채널은 held 표정(moodExprClip)에서 제외 — 채널 단일 소유:
 // emo.mthSurprised=surprised gasp(입벌림), emo.eyeJoy=happy 진입 눈웃음(감았다 뜸).
@@ -132,6 +132,12 @@ export function useAnimator(
       const mood = MOODS[nextMood] ?? MOODS.neutral
       scheduler.remove('mood-expr')
       scheduler.add(moodExprClip(mood.expression), false)
+      // 루프 톤 분기(5단계): 호흡/머리/포즈를 무드 스케일판으로 교체. hold-last가 현재값에서
+      // 이어받아 스냅 없음(scheduler.ts) — armPose/blink는 무드 무관 공유라 건드리지 않음.
+      TONE_LOOP_NAMES.forEach((name) => scheduler.remove(name))
+      mood.loops
+        .filter((t) => TONE_LOOP_NAMES.includes(t.name))
+        .forEach((t) => scheduler.add(t, true))
       // surprised 진입: 입벌림 gasp 일회성 발동 (held 입 대신 → 닫히며 viseme로 인계)
       if (nextMood === 'surprised') {
         scheduler.remove('gasp')

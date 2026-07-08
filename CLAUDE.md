@@ -218,7 +218,7 @@ VRM 로드 흐름(업로드 오버라이드): 파일 선택 → `URL.createObjec
 - [x] **TalkingHead 포팅 A+D 단계 완료** (시선/사케이드, 합성 viseme 립싱크)
 - [x] **TalkingHead 포팅 B+C+E 단계 완료** (애니메이션 스케줄러, 포즈 전환, 발화 제스처)
 - [x] **제스처/idle 폴리싱** (적극적 idle, 제스처 10종, DebugPanel 수동 트리거, 전역 편안한 손, z-index 수정)
-- [x] **무드 시스템 확장 1~4단계 완료** — 무드 5종(neutral/happy/sad/surprised/angry). 게임 이벤트별 표정 전환(`emo.*` 채널→preset emotion) + 무드별 제스처 톤. 발화 후 neutral decay. DebugPanel 무드/표정 버튼. (5단계 루프 톤 `moodName` 분기는 미착수)
+- [x] **무드 시스템 확장 1~4단계 완료** — 무드 5종(neutral/happy/sad/surprised/angry). 게임 이벤트별 표정 전환(`emo.*` 채널→preset emotion) + 무드별 제스처 톤. 발화 후 neutral decay. DebugPanel 무드/표정 버튼.
 - [x] **무드 변별/품질 폴리싱** — sad/angry는 눈썹 부위 모프(`Fcl_BRW_*`) 강조로 구분. surprised는 입벌림 gasp 일회성(발화 viseme와 분리). 표정↔립싱크 입 충돌 검증(가산·비파괴 확인)
 - [x] **happy 눈매 폴리싱 (얼굴 인지 + 일회성 분해)** — ①VRoid `Fcl_ALL_Joy` 속 눈웃음(`Fcl_EYE_Joy`)이 일부 얼굴(female)에선 눈을 덜 감게 저작됨 → 보이는 얼굴의 모프 정점 변위를 측정해 부족분만큼 `Fcl_EYE_Close`를 가산(목표 비율 0.62, male류는 boost=0 비퇴행). 얼굴 교체마다 lazy 재산출(`channels.ts refreshHappyEye`). ②preset `happy`(입+눈+눈썹 결합) held → "말하는 내내 눈감김" → surprised gasp와 동형으로 분해: 입(`Fcl_MTH_Joy`)·눈썹(`Fcl_BRW_Joy`) held + 눈(`emo.eyeJoy`)은 진입 시 일회성 클립(`HAPPY_EYE`)이 감았다 뜸 → 발화 중 눈뜸 유지
 - [x] **TTS 성별 음성 선택** — VRM에 성별 필드 없음 → 에디터에서 수동 선택(`Gender` 토글). `TTS_CONFIG`를 lang×gender로 확장
@@ -228,7 +228,7 @@ VRM 로드 흐름(업로드 오버라이드): 파일 선택 → `URL.createObjec
 - [x] **에디터 = 에셋 조립 (avatar-composer 흡수)** — 임의 VRM 업로드 폐기(authored-only). 에디터가 `CHARACTERS[]`(남자1/여자1) base + 모듈 파츠 카탈로그 조립으로 전환. `src/editor/`(constants/partLoader/ComposerAvatar/EditorScene/ui). 좌측 카탈로그 피커(face/hair/tops/bottoms 스왑) + 우측 공유 설정(색/셰이더/조명/톤). seam: 파츠 교체 후 `meshInfos` 재수집 → 색/셰이더 패널이 새 파츠 인지. composer 정책(유휴시선/wave/더미)은 벗기고 drei 정책(restpose/프레이밍) 주입. PoC 모드·AvatarScene·VRMAvatar 제거. (composer `INTEGRATION.md`/`INTEGRATION_GAP.md`)
 - [x] **컴패니언 = 에디터 조립 아바타 공유** — 조립 엔진을 `useAssembledVrm` 훅으로 추출(ComposerAvatar·CompanionAvatar 공유). 컴패니언이 `store.characterId/selection/eyeColor`로 base+파츠를 동일 조립 → 에디터에서 조합한 결과가 그대로 보임. 컴패니언 립싱크/anim/시선은 조립 위에 얹음(faceRef.sync로 얼굴교체도 표정 미러). DebugPanel 업로드는 `catalog=[]` 단일 VRM 오버라이드로 잔류
 - [x] **오프라인 파이프라인 이식 (Phase 7)** — `scripts/extractParts.mjs`(VRoid 소스→파츠 GLB/VRM raw 수술+prune) + `renderThumbs.mjs`(puppeteer로 `?thumb=` 단독 렌더 스냅샷) + `ui/ThumbScene.tsx` + `main.tsx` `?thumb=` 분기·`window.__CATALOG`. devDeps(@gltf-transform/core·functions, puppeteer) + `npm run assets`(extract→thumbs)/`extract`/`thumbs`. **extract·thumbs 둘 다 byte-deterministic 재생성 검증**. ⚠️ `prebuild` 미추가 — `parts/` 소스가 gitignore라 Vercel 빌드선 추출 불가(런타임 산출물 커밋으로 충당)
-- [ ] **후속: 무드 5단계 — 루프 톤 분기** — happy=활발한 머리/호흡, sad=느린 미동. 스케줄러 factory에 `moodName` 분기 추가 필요 (현재 루프는 전 무드 공유)
+- [x] **무드 5단계 — 루프 톤 분기** — happy=활발한 머리/호흡(템포↓·진폭↑), sad=느린 미동(템포↑·진폭↓). 스케줄러 자체엔 `moodName` 차원을 안 넣음 — `moods.ts`의 `scaleTemplate()`가 호흡/머리/포즈 템플릿을 무드별 톤(tempo/amplitude)으로 재귀 스케일해 `loopsForMood()`가 조립, `useAnimator`가 무드 전환 시 `TONE_LOOP_NAMES` 3종만 remove/재add(hold-last로 스냅 없음). neutral은 스케일 1×라 원본 객체 그대로 반환(참조 동일 = 비퇴행). armPose/blink는 이번 범위 밖(무드 무관 공유 유지)
 - [ ] **후속: IK 도입** — 손이 보이는 제스처(손가슴 등) 정밀화. CCDIKSolver 채널 추상화. 상세 [docs/ik-plan.md](docs/ik-plan.md)
 - [x] **에디터 라이브 프리뷰** — 디버그 패널 없는 에디터에서 모션 확인. VRoid VRM엔 내장 클립이 없어 AnimationMixer 경로(빈 패널) 폐기 → 컴패니언과 동일한 절차 엔진(`useAnimator`) 재사용. `store.animPreview` 토글(기본 OFF=정적 편집 보존, 비퇴행), ON 시 ComposerAvatar가 idle 구동. AnimationPanel = 토글 + 무드/제스처/idle포즈 트리거(`companion:*` window 이벤트 공유, DebugPanel과 동일 경로). `useAnimator(…, enabled)` 4번째 인자로 게이팅
 - [ ] Phase 4: 스크린샷/내보내기 (애니메이션 미리보기는 위 라이브 프리뷰로 완료)

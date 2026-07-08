@@ -3,7 +3,7 @@
 // 각 템플릿은 루프 클립으로 큐에 등록되며, 완료 시 gaussian 재롤되어 무한 반복.
 // idle/speaking 서브키로 발화 중 더 큰 머리 움직임 등 분기.
 
-import type { AnimTemplate } from './scheduler';
+import type { AnimTemplate, Ranged, ChannelValues } from './scheduler';
 
 // 호흡: 1.5초 지연 후 들숨(1.2s)→유지(0.5s)→날숨(1.0s) 반복
 const breathing: AnimTemplate = {
@@ -586,41 +586,83 @@ export interface Mood {
   gestures: AnimTemplate[]; // 발화 시작 시 1개 랜덤 발동
 }
 
-// 루프(호흡/머리/포즈/깜빡임)는 모든 무드 공유 — 루프 톤 분기는 5단계(이번 범위 외)
-const BASE_LOOPS: AnimTemplate[] = [breathing, head, pose, armPose, blink];
+// ── 루프 톤 분기 (5단계) ─────────────────────────────────
+// 호흡/머리/포즈는 무드별로 템포(전환 주기)·진폭(움직임 크기)을 스케일. armPose/blink는
+// 무드 무관 공유 유지(팔은 제스처가 별도 소유, 깜빡임은 이번 범위 밖 — mood-plan.md 5단계).
+interface LoopTone { tempo: number; amplitude: number } // tempo<1=빠름, amplitude=움직임 배율
+const DEFAULT_TONE: LoopTone = { tempo: 1, amplitude: 1 }; // neutral/surprised/angry — 스케일 무연산
+const MOOD_TONE: Record<string, LoopTone> = {
+  happy: { tempo: 0.7, amplitude: 1.2 }, // 30% 빠르게 · 20% 크게 — 활발한 머리/호흡
+  sad: { tempo: 1.6, amplitude: 0.55 }, // 60% 느리게 · 45% 작게 — 느린 미동
+};
+
+function scaleRanged(x: Ranged, factor: number): Ranged {
+  if (!Array.isArray(x)) return x * factor;
+  const [min, max, skew, samples] = x;
+  return skew === undefined ? [min * factor, max * factor] : [min * factor, max * factor, skew, samples];
+}
+
+// dt/delay는 tempo로, vs(진폭)는 amplitude로 스케일. alt/idle/speaking 재귀 순회.
+// tone={1,1}이면 원본을 그대로 반환 — neutral은 참조 동일성까지 유지(진짜 비퇴행).
+function scaleTemplate(t: AnimTemplate, tone: LoopTone): AnimTemplate {
+  if (tone.tempo === 1 && tone.amplitude === 1) return t;
+  const out: AnimTemplate = { ...t };
+  if (t.delay !== undefined) out.delay = scaleRanged(t.delay, tone.tempo);
+  if (t.dt) out.dt = t.dt.map((d) => scaleRanged(d, tone.tempo));
+  if (t.vs) {
+    const vs: ChannelValues = {};
+    for (const [ch, arr] of Object.entries(t.vs)) {
+      vs[ch] = arr.map((v) => (v === null ? null : scaleRanged(v, tone.amplitude)));
+    }
+    out.vs = vs;
+  }
+  if (t.alt) out.alt = t.alt.map((branch) => scaleTemplate(branch, tone));
+  for (const state of ['idle', 'speaking'] as const) {
+    if (t[state]) out[state] = scaleTemplate(t[state] as AnimTemplate, tone);
+  }
+  return out;
+}
+
+// 무드 전환 시 useAnimator가 remove/재add할 톤 분기 루프 이름(단일 소스).
+export const TONE_LOOP_NAMES = ['breathing', 'head', 'pose'];
+
+function loopsForMood(moodName: string): AnimTemplate[] {
+  const tone = MOOD_TONE[moodName] ?? DEFAULT_TONE;
+  return [scaleTemplate(breathing, tone), scaleTemplate(head, tone), scaleTemplate(pose, tone), armPose, blink];
+}
 
 export const MOODS: Record<string, Mood> = {
   neutral: {
     // 팔내리기는 baseline(armL.z -1.3 / armR.z 1.3)이 담당 — hold-last로 매 프레임 유지.
     // 별도 settle 클립 불필요 (로드 시 1프레임에 대기 자세 확정)
     expression: {},
-    loops: BASE_LOOPS,
+    loops: loopsForMood('neutral'),
     gestures: GESTURES,
   },
   happy: {
     // 입·눈썹 미소만 held (preset Fcl_ALL_Joy의 눈 결합 제거) → 발화 내내 눈뜸 유지.
     // 눈 웃음(eyeJoy)은 진입 시 일회성 클립(HAPPY_EYE, useAnimator)이 감았다 뜬다(surprised gasp와 동형).
     expression: { mthJoy: 0.9, browJoy: 0.6 },
-    loops: BASE_LOOPS,
+    loops: loopsForMood('happy'),
     gestures: HAPPY_GESTURES,
   },
   sad: {
     // relaxed(Fcl_ALL_Fun=즐거움) 제거 — 슬픔을 약화시켰음. 눈썹 올림(Sorrow)으로 변별 강화
     expression: { sad: 0.9, browSorrow: 0.5 },
-    loops: BASE_LOOPS,
+    loops: loopsForMood('sad'),
     gestures: SAD_GESTURES,
   },
   surprised: {
     // Fcl_ALL_Surprised(입 크게 벌림) 대신 부위 조합 — 발화 viseme와 과중첩 방지.
     // 눈썹·눈은 held(놀람 신호 유지). 입은 진입 시 gasp 일회성 입벌림 후 닫힘(useAnimator).
     expression: { browSurprised: 0.85, eyeSurprised: 0.7 },
-    loops: BASE_LOOPS,
+    loops: loopsForMood('surprised'),
     gestures: SURPRISED_GESTURES,
   },
   angry: {
     // 눈썹 내림·모음(Angry)으로 sad와 변별 강화
     expression: { angry: 0.8, browAngry: 0.6 },
-    loops: BASE_LOOPS,
+    loops: loopsForMood('angry'),
     gestures: ANGRY_GESTURES,
   },
 };
