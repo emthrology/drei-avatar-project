@@ -106,4 +106,4 @@ EVENT_MOODS: Record<GameEventType, MoodName> = {
   - `MOOD_TONE`: `happy={tempo:0.7, amplitude:1.2}`, `sad={tempo:1.6, amplitude:0.55}`. 나머지(neutral/surprised/angry)는 `{1,1}` — `scaleTemplate`이 `tone={1,1}`이면 원본 객체를 그대로 반환(참조 동일성 유지)해 비퇴행 보장
   - 분기 대상은 `breathing`/`head`/`pose` 3종만(`TONE_LOOP_NAMES`로 export). `armPose`/`blink`는 무드 무관 공유 유지 — armPose는 제스처가 별도 소유하는 채널이라 톤 분기 실익이 적고, blink는 이번 범위 밖으로 명시적으로 남김
   - `useAnimator.ts`의 무드 전환 블록에서 `TONE_LOOP_NAMES` 3종을 `scheduler.remove()` 후 새 무드의 스케일판을 `scheduler.add(..., true)`로 재등록. 스케줄러의 hold-last(현재값에서 이어받음)가 전환 시 시각적 스냅을 막아줌 — 스케줄러 자체는 무드를 전혀 모른 채 그대로 재사용
-- 튜닝 수치(tempo/amplitude)는 1차 추정값 — 실제 체감은 브라우저에서 시각 확인 필요(이 프로젝트 관례상 모션 자연스러움은 수동 검증 영역, `testing-strategy.md`)
+- 튜닝 수치(tempo/amplitude)는 1차 추정값 — 실제 체감은 브라우저에서 시각 확인 필요(이 프로젝트 관례상 모션 자연스러움은 수동 검증 영역 — CLAUDE.md 「테스트 관례」)
