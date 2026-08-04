@@ -79,7 +79,7 @@ export function CompanionAvatar({ uploadUrl, speaking, mood, onReady, onCameraRe
   const { vrm, vrmRef, syncFace } = useAssembledVrm(baseUrl, catalog)
 
   const { speak } = useLipsync(vrmRef)
-  useAnimator(vrmRef, stateRef, moodRef) // ⏸️ 손인사 보류: greetOnReady 인자 제거 (docs/wave-gesture-attempts.md)
+  useAnimator(vrmRef, stateRef, moodRef, true, true) // 마지막=greetOnReady(등장 시 손인사 1회)
   useLookAt(vrmRef)
 
   // 조립 base 의 dispose/회전은 useAssembledVrm 이 담당. 여기선 ready/카메라만.

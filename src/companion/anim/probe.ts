@@ -24,6 +24,15 @@ export interface ArmSample {
   elbow: [number, number, number]; // LowerArm 관절 위치
   hand: [number, number, number]; // Hand 관절 위치
   armQuat: [number, number, number, number]; // UpperArm world quaternion (상완 정지도용)
+  /**
+   * 손끝(중지 말단) 위치. **손목 회전은 Hand 관절 원점을 못 움직인다** — 회전하는 건 자식(손가락)
+   * 뿐이라 `hand` 만 재면 손목 flick 이 통째로 안 보인다(이동폭 0). 손인사는 손목이 주도하므로
+   * 말단 점이 있어야 흔들기를 관측할 수 있다. 손가락 본이 없는 모델은 undefined → hand 로 대체.
+   */
+  tip?: [number, number, number];
+  /** 검지·소지 밑마디. 손바닥 평면을 정의한다(손바닥 법선 = 두 벡터의 외적) */
+  indexBase?: [number, number, number];
+  littleBase?: [number, number, number];
 }
 
 // 프레임당 재사용 (샘플링이 useFrame 에서 도므로 할당 금지)
@@ -50,6 +59,15 @@ export function sampleArm(vrm: VRM, side: Side, t: number): ArmSample | null {
   const ref = h.getNormalizedBoneNode(B.Hips);
   if (!shoulder || !elbow || !hand || !ref) return null;
 
+  // 손끝: 중지 말단부터 내려오며 있는 것을 쓴다 (부분 리그 모델 안전)
+  const tipBone =
+    h.getNormalizedBoneNode(side === 'L' ? B.LeftMiddleDistal : B.RightMiddleDistal) ??
+    h.getNormalizedBoneNode(side === 'L' ? B.LeftMiddleIntermediate : B.RightMiddleIntermediate) ??
+    h.getNormalizedBoneNode(side === 'L' ? B.LeftMiddleProximal : B.RightMiddleProximal);
+
+  const indexBone = h.getNormalizedBoneNode(side === 'L' ? B.LeftIndexProximal : B.RightIndexProximal);
+  const littleBone = h.getNormalizedBoneNode(side === 'L' ? B.LeftLittleProximal : B.RightLittleProximal);
+
   shoulder.getWorldQuaternion(_q);
   return {
     t,
@@ -57,6 +75,9 @@ export function sampleArm(vrm: VRM, side: Side, t: number): ArmSample | null {
     elbow: localPos(elbow, ref),
     hand: localPos(hand, ref),
     armQuat: [_q.x, _q.y, _q.z, _q.w],
+    ...(tipBone ? { tip: localPos(tipBone, ref) } : {}),
+    ...(indexBone ? { indexBase: localPos(indexBone, ref) } : {}),
+    ...(littleBone ? { littleBase: localPos(littleBone, ref) } : {}),
   };
 }
 
@@ -75,6 +96,29 @@ export interface ArmMetrics {
   handHeight: number;
   /** 손↔상완 선분 최소거리(m). 작을수록 하완이 상완에 포개짐(시도4 실패 모드) */
   clearance: number;
+  /** 손끝 이동 범위. 손목 flick 은 여기서만 보인다(hand 관절은 안 움직임) */
+  tipSpan: { x: number; y: number; z: number };
+  /** 손끝 기준 흔들림 주축 */
+  tipSwingAxis: 'horizontal' | 'vertical' | 'depth' | 'none';
+  /**
+   * 하완이 몸통에서 떨어진 정도(m) — 하완 중점의 **몸 중심축(Hips 수직선) 수평거리** 최솟값.
+   * 작으면 하완이 몸통 실루엣에 파묻혀 "뭉개져" 보인다(팔꿈치를 깊게 접을수록 심함).
+   * `clearance`(손↔상완)와 다른 실패 모드 — 그쪽은 팔끼리 포개짐, 이쪽은 팔이 몸통에 붙음.
+   */
+  torsoClearance: number;
+  /**
+   * 손바닥이 몸 **바깥**을 향하는 정도 (−1~1, 1=완전히 바깥). 손인사는 손바닥을 상대에게
+   * 보여야 하므로 바깥/앞을 향해야 한다. 손등이 보이면 음수.
+   * 손바닥 법선 = (검지밑 − 손목) × (소지밑 − 손목), 바깥 방향 = 팔이 달린 쪽(어깨 x 부호).
+   * 손가락 본이 없으면 0(판정 보류).
+   */
+  palmOut: number;
+  /**
+   * 손바닥이 **정면(보는 사람 쪽, +z)** 을 향하는 정도 (−1~1). 인사는 손바닥을 상대에게
+   * 보여야 하므로 이쪽이 실제 목표다 — `palmOut`(측면)만 최대화하면 손이 날로 서서
+   * 카메라에선 손등도 손바닥도 안 보인다(실측 palmOut 0.99일 때 화면상 edge-on).
+   */
+  palmFwd: number;
 }
 
 export interface Check {
@@ -99,7 +143,16 @@ export interface ArmTargets {
   minSpan?: number; // m. 주축 이동폭이 이보다 작으면 "거의 안 움직임"
 }
 
-/** 손인사(wave) 기준 — 실패 기록 5건을 그대로 술어화한 값 */
+/**
+ * 손인사(wave) 기준 — 실패 기록 5건을 그대로 술어화한 값.
+ *
+ * ⚠️ `minSpan`·`swingAxis`는 **손끝**에서 잰다(2026-08-04 변경, 사용자 승인).
+ * 손목 관절 기준이던 것을 옮겼다 — 손목을 회전시키면 움직이는 건 자식(손가락)뿐이고 관절
+ * 원점은 제자리라, 손목 주도 흔들기에서 손목 span 은 **구조적으로 0**(실측 0.002)이었다.
+ * 즉 어떤 손인사도 통과할 수 없는 기준이었다 = 측정기의 오류.
+ * **임계값 0.08 은 낮추지 않고 그대로 유지**했다(손끝 실측 0.10~0.13 — 여유는 있으나 공짜 아님).
+ * 나머지 4개(상완 정지도·하완 전방·손 높이·상완 이격)는 손목/관절 기준 그대로.
+ */
 export const WAVE_TARGETS: Required<ArmTargets> = {
   swingAxis: 'horizontal',
   maxArmSwing: 0.15, // ≈8.6° — 상완은 거의 정지, 손목/팔꿈치가 흔든다
@@ -143,20 +196,32 @@ export function measureArm(samples: ArmSample[]): ArmMetrics {
       forearmFront: 0,
       handHeight: 0,
       clearance: 0,
+      tipSpan: { x: 0, y: 0, z: 0 },
+      tipSwingAxis: 'none',
+      torsoClearance: 0,
+      palmOut: 0,
+      palmFwd: 0,
     };
   }
 
-  const axisSpan = (i: number) => {
-    const vs = samples.map((s) => s.hand[i]);
-    return Math.max(...vs) - Math.min(...vs);
+  // 한 점의 궤적 → 축별 이동폭 + 주축. 주축은 최대 성분이 나머지보다 1.5배 이상 커야 인정
+  const spanOf = (pick: (s: ArmSample) => [number, number, number]) => {
+    const axis = (i: number) => {
+      const vs = samples.map((s) => pick(s)[i]);
+      return Math.max(...vs) - Math.min(...vs);
+    };
+    const span = { x: axis(0), y: axis(1), z: axis(2) };
+    const ranked = ([['horizontal', span.x], ['vertical', span.y], ['depth', span.z]] as const)
+      .slice()
+      .sort((a, b) => b[1] - a[1]);
+    const swingAxis: ArmMetrics['swingAxis'] =
+      ranked[0][1] > ranked[1][1] * 1.5 ? ranked[0][0] : 'none';
+    return { span, swingAxis };
   };
-  const span = { x: axisSpan(0), y: axisSpan(1), z: axisSpan(2) };
 
-  // 주축: 최대 성분이 나머지보다 1.5배 이상 커야 "그 축으로 흔든다"고 인정
-  const ranked = ([['horizontal', span.x], ['vertical', span.y], ['depth', span.z]] as const)
-    .slice()
-    .sort((a, b) => b[1] - a[1]);
-  const swingAxis = ranked[0][1] > ranked[1][1] * 1.5 ? ranked[0][0] : 'none';
+  const { span, swingAxis } = spanOf((s) => s.hand);
+  // 손끝 본이 없는 모델은 hand 로 대체 → 기존 동작과 동일한 값(비퇴행)
+  const tip = spanOf((s) => s.tip ?? s.hand);
 
   const ref = samples[Math.floor(samples.length / 2)].armQuat;
   const armSwing = Math.max(...samples.map((s) => quatAngle(s.armQuat, ref)));
@@ -168,20 +233,52 @@ export function measureArm(samples: ArmSample[]): ArmMetrics {
     forearmFront: mean(samples.map((s) => s.hand[2] - s.elbow[2])),
     handHeight: mean(samples.map((s) => s.hand[1] - s.shoulder[1])),
     clearance: Math.min(...samples.map((s) => pointSegDist(s.hand, s.shoulder, s.elbow))),
+    tipSpan: tip.span,
+    tipSwingAxis: tip.swingAxis,
+    // 하완 중점의 몸 중심축 수평거리 (Hips 로컬이라 축이 곧 x=z=0 수직선)
+    torsoClearance: Math.min(
+      ...samples.map((s) => Math.hypot((s.hand[0] + s.elbow[0]) / 2, (s.hand[2] + s.elbow[2]) / 2)),
+    ),
+    palmOut: mean(samples.map((s) => palmNormal(s)[0])),
+    palmFwd: mean(samples.map((s) => palmNormal(s)[1])),
   };
+}
+
+/** 손바닥 법선 → [바깥향(측면), 정면향] 코사인. 손가락 본이 없으면 [0,0] */
+function palmNormal(s: ArmSample): [number, number] {
+  if (!s.indexBase || !s.littleBase) return [0, 0];
+  const a = [s.indexBase[0] - s.hand[0], s.indexBase[1] - s.hand[1], s.indexBase[2] - s.hand[2]];
+  const b = [s.littleBase[0] - s.hand[0], s.littleBase[1] - s.hand[1], s.littleBase[2] - s.hand[2]];
+  // 외적 = 손바닥 평면의 법선
+  const n = [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+  const len = Math.hypot(n[0], n[1], n[2]);
+  if (len < 1e-9) return [0, 0];
+  // 바깥 = 팔이 달린 쪽(어깨의 x 부호). 정면 = +z (아바타가 바라보는 방향 = 카메라 쪽).
+  const outward = Math.sign(s.shoulder[0]) || 1;
+  return [(n[0] / len) * outward, n[2] / len];
 }
 
 /** 지표 → 합격/불합격 판정. 실패한 체크의 이름이 곧 어느 실패 모드인지 알려준다. */
 export function evaluateArm(samples: ArmSample[], targets: ArmTargets = WAVE_TARGETS): ArmVerdict {
   const m = measureArm(samples);
   const t = { ...WAVE_TARGETS, ...targets };
-  const majorSpan = m.swingAxis === 'vertical' ? m.span.y : m.swingAxis === 'depth' ? m.span.z : m.span.x;
+  // 흔들기 판정은 손끝 기준 (손목 관절은 손목 회전으로 안 움직임 — WAVE_TARGETS 주석 참조)
+  const majorSpan =
+    m.tipSwingAxis === 'vertical'
+      ? m.tipSpan.y
+      : m.tipSwingAxis === 'depth'
+        ? m.tipSpan.z
+        : m.tipSpan.x;
 
   const checks: Check[] = [
     {
       name: '흔들림 주축',
-      pass: m.swingAxis === t.swingAxis,
-      value: m.swingAxis,
+      pass: m.tipSwingAxis === t.swingAxis,
+      value: m.tipSwingAxis,
       want: t.swingAxis,
     },
     { name: '이동폭', pass: majorSpan >= t.minSpan, value: +majorSpan.toFixed(4), want: `≥${t.minSpan}` },

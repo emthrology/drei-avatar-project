@@ -24,10 +24,9 @@ function triggerIdlePose(index: number) {
   window.dispatchEvent(new CustomEvent('companion:idlepose', { detail: { index } }))
 }
 
-// ⏸️ 손인사 보류 (재개 시 복구 — docs/wave-gesture-attempts.md):
-// function triggerWave() {
-//   window.dispatchEvent(new CustomEvent('companion:wave'))
-// }
+function triggerWave() {
+  window.dispatchEvent(new CustomEvent('companion:wave'))
+}
 
 // 손동작 수치 프로브 — ms 동안 팔 기하를 샘플링해 판정(anim/probe.ts).
 // 육안 대신 수치로 보므로 "덜렁덜렁" 같은 표현이 어느 지표 불합격인지로 환원된다.
@@ -91,6 +90,10 @@ export function DebugPanel({ status, lastText, lang, gender, onEvent, onLangChan
       fontFamily: 'monospace', fontSize: 13, minWidth: 220,
       backdropFilter: 'blur(6px)',
       zIndex: 9999,
+      // 버튼이 늘면(제스처 추가·스윕) 패널이 세로로 길어져 아바타를 가린다 → 자체 스크롤로
+      // 가둔다. 폭도 상한을 둬 긴 라벨이 패널을 옆으로 늘리지 않게(오버레이는 우하단).
+      maxHeight: 'calc(100vh - 32px)', maxWidth: '32vw',
+      overflowY: 'auto', overflowX: 'hidden',
     }}>
       {/* 상태 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -233,9 +236,18 @@ export function DebugPanel({ status, lastText, lang, gender, onEvent, onLangChan
       <hr style={{ border: 'none', borderTop: '1px solid #333', margin: '8px 0' }} />
 
       {/* 제스처 수동 트리거 */}
-      {/* ⏸️ 손인사 버튼 보류 (재개 시 복구 — docs/wave-gesture-attempts.md) */}
       <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>Gestures</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <button
+          onClick={triggerWave}
+          style={{
+            background: '#312e81', color: '#e0e7ff',
+            border: '1px solid #4f46e5', borderRadius: 6,
+            padding: '4px 8px', cursor: 'pointer', fontSize: 11,
+          }}
+        >
+          👋 손인사
+        </button>
         {GESTURE_LABELS.map((label, i) => (
           <button
             key={i}

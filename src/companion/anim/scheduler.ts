@@ -85,6 +85,7 @@ const DEFAULT_EASING = sigmoidFactory(7)
 // 채널의 운동학적 깊이 (proximal→distal). overlap 지연 = 깊이 × config.overlap.
 // torso(몸통·척추)가 먼저 움직이고 팔·손이 뒤따름 → 한 덩어리 움직임 해소.
 function channelDepth(ch: string): number {
+  if (ch.startsWith('hand')) return 3 // 손목 = 최말단 (몸통→상완→하완→손 순서)
   if (ch.startsWith('elbow')) return 2
   if (ch.startsWith('arm') || ch.startsWith('head')) return 1
   return 0 // spine/chest(몸통, 선행) · blink/emo(얼굴, 지연 없음)

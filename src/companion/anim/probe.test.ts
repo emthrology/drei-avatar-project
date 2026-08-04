@@ -167,6 +167,40 @@ describe('evaluateArm — 실패 기록 재현 (docs/wave-gesture-attempts.md)',
     expect(v.checks.find((c) => c.name === '이동폭')?.pass).toBe(false);
   });
 
+  it('손목은 제자리여도 손끝이 흔들리면 통과 — 손목 주도 인사(측정 지점 이동)', () => {
+    // 손목 회전은 Hand 관절 원점을 못 움직인다(자식인 손가락만 움직임). 손목 기준으로 재던
+    // 옛 프로브는 이 동작을 이동폭 0 으로 봐서 **어떤 손인사도 통과 불가**였다.
+    const wristStill: [number, number, number] = [0.28, 1.46, 0.22];
+    const samples = mk([wristStill, wristStill, wristStill, wristStill], {
+      shoulder: [0.16, 1.36, 0],
+      elbow: [0.22, 1.16, 0.04],
+    }).map((s, i) => ({
+      ...s,
+      // 손끝만 좌우로 12cm 스윙
+      tip: [i % 2 === 0 ? 0.24 : 0.36, 1.52, 0.24] as [number, number, number],
+    }));
+
+    const v = evaluateArm(samples);
+    expect(v.checks.find((c) => c.name === '흔들림 주축')?.pass).toBe(true);
+    expect(v.checks.find((c) => c.name === '이동폭')?.pass).toBe(true);
+    expect(v.pass).toBe(true);
+    // 손목 자체는 안 움직였다는 사실도 함께 고정 (측정 지점이 정말 손끝인지)
+    expect(v.span.x).toBeCloseTo(0, 6);
+  });
+
+  it('tip 이 없는 모델은 hand 로 대체 — 기존 판정과 동일 (비퇴행)', () => {
+    const noTip = mk(
+      [
+        [0.28, 1.46, 0.22],
+        [0.4, 1.46, 0.22],
+        [0.28, 1.46, 0.22],
+      ],
+      { shoulder: [0.16, 1.36, 0], elbow: [0.22, 1.16, 0.04] },
+    );
+    expect(noTip[0].tip).toBeUndefined();
+    expect(evaluateArm(noTip).pass).toBe(true);
+  });
+
   it('targets 를 덮어쓰면 같은 샘플도 판정이 바뀐다 (임계 재보정 경로)', () => {
     const flap = mk(
       [
