@@ -60,7 +60,7 @@ drei-avatar-project/
 │   │   ├── GradingPanel.tsx  # 톤 슬라이더 (밝기/대비/색조/채도)
 │   │   └── AnimationPanel.tsx# 에디터 라이브 프리뷰 토글(store.animPreview) + 무드/제스처/idle포즈 트리거(window 이벤트)
 │   ├── companion/
-│   │   ├── CompanionOverlay.tsx  # fixed 오버레이 (300×400, bottom-right)
+│   │   ├── CompanionOverlay.tsx  # fixed 오버레이 (300×400, bottom-right) + DprGovernor(FPS 하락 시 DPR↓)
 │   │   ├── CompanionAvatar.tsx   # useAssembledVrm(조립 공유) + 본기반 카메라 + 립싱크/애니/시선. 업로드는 catalog=[] 오버라이드
 │   │   ├── DebugPanel.tsx        # 컴패니언 디버그 패널 (상태/이벤트/언어/VRM 로드)
 │   │   ├── useLipsync.ts         # word timing → 음소 스케줄 → viseme
@@ -68,8 +68,8 @@ drei-avatar-project/
 │   │   ├── visemeApplier.ts      # 모음→expressionManager / 자음→Fcl_MTH_* 직접
 │   │   ├── useLookAt.ts          # 시선 추적 + rangeMap 보정 + center/glance 사케이드
 │   │   ├── anim/                 # ── 절차 애니메이션 스케줄러 (B/C/E) ──
-│   │   │   ├── scheduler.ts      #   animFactory + tick(clock 보간) + gaussian + 클립별 ease (scheduler.test.ts 콜로케이트)
-│   │   │   ├── channels.ts       #   논리 채널 → VRM 본/표정. baseline(rest) 정의
+│   │   │   ├── scheduler.ts      #   animFactory + tick(clock 보간) + gaussian + 클립별 ease + MotionConfig(overlap 시차/smootherstep) (scheduler.test.ts 콜로케이트)
+│   │   │   ├── channels.ts       #   논리 채널 → VRM 본/표정. baseline(rest) 정의 + micro-drift 레이어
 │   │   │   ├── moods.ts          #   무드 5종: 루프(호흡/머리/포즈/armPose팔/깜빡임) + 제스처 10종
 │   │   │   └── useAnimator.ts    #   R3F 훅. 발화 전환 시 랜덤 제스처 + idle 팔 포즈 트리거
 │   │   ├── useGameEvents.ts      # window game:event 수신
@@ -176,7 +176,7 @@ window.dispatchEvent(new CustomEvent('game:event', {
 ```
 VITE_GOOGLE_TTS_API_KEY=your_key_here
 ```
-없으면 말풍선만 표시 (오디오 없음).
+없으면 말풍선만 표시 (오디오 없음). 현재 등급은 WaveNet — 실수요 서비스 이식 시 백엔드 선정(트래픽 구간별 비용·한국어 품질·립싱크 타이밍 제공 여부)은 [docs/tts-model-selection.md](docs/tts-model-selection.md).
 
 ## 컴패니언 DebugPanel
 
@@ -218,20 +218,32 @@ VRM 로드 흐름(업로드 오버라이드): 파일 선택 → `URL.createObjec
 - [x] **TalkingHead 포팅 A+D 단계 완료** (시선/사케이드, 합성 viseme 립싱크)
 - [x] **TalkingHead 포팅 B+C+E 단계 완료** (애니메이션 스케줄러, 포즈 전환, 발화 제스처)
 - [x] **제스처/idle 폴리싱** (적극적 idle, 제스처 10종, DebugPanel 수동 트리거, 전역 편안한 손, z-index 수정)
-- [x] **무드 시스템 확장 1~4단계 완료** — 무드 5종(neutral/happy/sad/surprised/angry). 게임 이벤트별 표정 전환(`emo.*` 채널→preset emotion) + 무드별 제스처 톤. 발화 후 neutral decay. DebugPanel 무드/표정 버튼.
+- [x] **무드 시스템 확장 1~4단계 완료** — 무드 5종(neutral/happy/sad/surprised/angry). 게임 이벤트별 표정 전환(`emo.*` 채널→preset emotion) + 무드별 제스처 톤. 발화 후 neutral decay. DebugPanel 무드/표정 버튼. 상세 [docs/mood-plan.md](docs/mood-plan.md)
 - [x] **무드 변별/품질 폴리싱** — sad/angry는 눈썹 부위 모프(`Fcl_BRW_*`) 강조로 구분. surprised는 입벌림 gasp 일회성(발화 viseme와 분리). 표정↔립싱크 입 충돌 검증(가산·비파괴 확인)
 - [x] **happy 눈매 폴리싱 (얼굴 인지 + 일회성 분해)** — ①VRoid `Fcl_ALL_Joy` 속 눈웃음(`Fcl_EYE_Joy`)이 일부 얼굴(female)에선 눈을 덜 감게 저작됨 → 보이는 얼굴의 모프 정점 변위를 측정해 부족분만큼 `Fcl_EYE_Close`를 가산(목표 비율 0.62, male류는 boost=0 비퇴행). 얼굴 교체마다 lazy 재산출(`channels.ts refreshHappyEye`). ②preset `happy`(입+눈+눈썹 결합) held → "말하는 내내 눈감김" → surprised gasp와 동형으로 분해: 입(`Fcl_MTH_Joy`)·눈썹(`Fcl_BRW_Joy`) held + 눈(`emo.eyeJoy`)은 진입 시 일회성 클립(`HAPPY_EYE`)이 감았다 뜸 → 발화 중 눈뜸 유지
 - [x] **TTS 성별 음성 선택** — VRM에 성별 필드 없음 → 에디터에서 수동 선택(`Gender` 토글). `TTS_CONFIG`를 lang×gender로 확장
 - [x] **에디터 조명 컨트롤 + 공유 SceneLights** — `store.lighting`로 에디터/컴패니언 조명 공유, LightPanel 슬라이더(환경광/메인광 강도·각도). rim 제거
-- [x] **컬러 그레이딩 (포스트프로세싱)** — 사진편집식 톤(밝기/대비/색조/채도). EffectComposer 화면 레이어(모델 비훼손), 에디터·컴패니언 `store.grading` 공유. emission/outline색/shadingShift는 모델 검증 후 폐기 ([docs/shader-features-plan.md](docs/shader-features-plan.md), [docs/drei-opportunities.md](docs/drei-opportunities.md))
+- [x] **컬러 그레이딩 (포스트프로세싱)** — 사진편집식 톤(밝기/대비/색조/채도). EffectComposer 화면 레이어(모델 비훼손), 에디터·컴패니언 `store.grading` 공유. emission/outline색/shadingShift는 모델 검증 후 폐기 ([docs/shader-features-plan.md](docs/shader-features-plan.md))
 - [x] **idle 자연스러운 팔 동작 (FK)** — armPose 루프(허리짚기/뒷짐/미세 무게이동) + 몸통 둘러보기. IK는 보류 ([docs/idle-arm-plan.md](docs/idle-arm-plan.md))
 - [x] **에디터 = 에셋 조립 (avatar-composer 흡수)** — 임의 VRM 업로드 폐기(authored-only). 에디터가 `CHARACTERS[]`(남자1/여자1) base + 모듈 파츠 카탈로그 조립으로 전환. `src/editor/`(constants/partLoader/ComposerAvatar/EditorScene/ui). 좌측 카탈로그 피커(face/hair/tops/bottoms 스왑) + 우측 공유 설정(색/셰이더/조명/톤). seam: 파츠 교체 후 `meshInfos` 재수집 → 색/셰이더 패널이 새 파츠 인지. composer 정책(유휴시선/wave/더미)은 벗기고 drei 정책(restpose/프레이밍) 주입. PoC 모드·AvatarScene·VRMAvatar 제거. (composer `INTEGRATION.md`/`INTEGRATION_GAP.md`)
 - [x] **컴패니언 = 에디터 조립 아바타 공유** — 조립 엔진을 `useAssembledVrm` 훅으로 추출(ComposerAvatar·CompanionAvatar 공유). 컴패니언이 `store.characterId/selection/eyeColor`로 base+파츠를 동일 조립 → 에디터에서 조합한 결과가 그대로 보임. 컴패니언 립싱크/anim/시선은 조립 위에 얹음(faceRef.sync로 얼굴교체도 표정 미러). DebugPanel 업로드는 `catalog=[]` 단일 VRM 오버라이드로 잔류
 - [x] **오프라인 파이프라인 이식 (Phase 7)** — `scripts/extractParts.mjs`(VRoid 소스→파츠 GLB/VRM raw 수술+prune) + `renderThumbs.mjs`(puppeteer로 `?thumb=` 단독 렌더 스냅샷) + `ui/ThumbScene.tsx` + `main.tsx` `?thumb=` 분기·`window.__CATALOG`. devDeps(@gltf-transform/core·functions, puppeteer) + `npm run assets`(extract→thumbs)/`extract`/`thumbs`. **extract·thumbs 둘 다 byte-deterministic 재생성 검증**. ⚠️ `prebuild` 미추가 — `parts/` 소스가 gitignore라 Vercel 빌드선 추출 불가(런타임 산출물 커밋으로 충당)
 - [x] **무드 5단계 — 루프 톤 분기** — happy=활발한 머리/호흡(템포↓·진폭↑), sad=느린 미동(템포↑·진폭↓). 스케줄러 자체엔 `moodName` 차원을 안 넣음 — `moods.ts`의 `scaleTemplate()`가 호흡/머리/포즈 템플릿을 무드별 톤(tempo/amplitude)으로 재귀 스케일해 `loopsForMood()`가 조립, `useAnimator`가 무드 전환 시 `TONE_LOOP_NAMES` 3종만 remove/재add(hold-last로 스냅 없음). neutral은 스케일 1×라 원본 객체 그대로 반환(참조 동일 = 비퇴행). armPose/blink는 이번 범위 밖(무드 무관 공유 유지)
+- [x] **drei 로딩 인디케이터 + 컴패니언 FPS 적응형 DPR** — 에디터: 12MB VRM 로딩 중 `useProgress()` % 를 Suspense fallback으로 표시. 컴패니언: `<PerformanceMonitor>`를 `setDpr`에 직접 연결(`DprGovernor`)해 FPS 하락 시 오버레이 해상도를 낮춰 **게임 프레임 보호**, 회복 시 복원. ⚠️ drei `<AdaptiveDpr>`는 OrbitControls 없는 이 캔버스에서 `performance.regress()`가 안 불려 **무동작** → 콜백 직결 방식으로 대체
+- [x] **모션 자연스러움 — 탈로봇 (overlap/smootherstep + micro-drift + idle 다양화)** — 3단계. ①`scheduler.ts` `MotionConfig{overlap,smooth}`(기본 0=off, 바이트 동일): 채널 운동학적 깊이(torso 0→arm/head 1→elbow 2)만큼 시작 시각을 미뤄 몸통→팔→손 시차 + 본 채널 이징을 smootherstep로 블렌드. **오버슈트는 시도 후 반려**("각진 군인" 피드백) → `moods.ts` 데이터 무변경으로 전 클립 소급 적용. ②`channels.ts` micro-drift: 초저주파 sine을 apply-레이어에서 가산해 hold 구간 "얼어붙음" 제거. ③`IDLE_ARM_POSES`에 앞으로모으기 추가 + 차렷 확률 0.72→0.55(팔짱·한손잡기는 클리핑으로 반려). 상세 [docs/motion-naturalness-plan.md](docs/motion-naturalness-plan.md) · 보류 기록 [docs/wave-gesture-attempts.md](docs/wave-gesture-attempts.md)
 - [ ] **후속: IK 도입** — 손이 보이는 제스처(손가슴 등) 정밀화. CCDIKSolver 채널 추상화. 상세 [docs/ik-plan.md](docs/ik-plan.md)
+- [ ] **후속: 하반신 무게이동** — 현 `pose` 루프는 Spine만 회전(액티브함 구조적 천장). Hips/UpperLeg/LowerLeg 축 검증 후 `hips.*`/`knee.*` 채널 신설. 신규 본/채널 회귀 위험으로 보류 ([docs/motion-naturalness-plan.md](docs/motion-naturalness-plan.md) 4번)
+- [ ] **🔨 진행 중: 손인사(wave) 재개** — 2026-07-08 FK 5회 실패 후 보류했다가 **검증 방식을 바꿔 재개**(2026-08-04). 지난 실패의 근본 원인은 축 지식 부족이 아니라 "값 수정 → 사람이 육안 확인 → 피드백" 루프였음 → **수치 프로브 도입 완료**(`npm run probe`, 위 「손동작은 육안 아닌 수치로 검증」). **다음 세션은 여기서 시작**:
+  1. **`RightHand` 본 축 실측** — 값 넣고 `npm run probe`로 어느 축이 좌우 흔들기인지 확인. **추측 금지, 측정**(기존 UpperArm/LowerArm 축은 검증됐으나 Hand는 미검증)
+  2. `channels.ts`에 `handR.*` 채널 신설 (현재 손가락 16본은 있으나 **손목 본은 채널 없음**)
+  3. `moods.ts:456` `WAVE` 주석 해제 → 손목 주도로 재작성(팔은 정적, 손만 flick) → 프로브 PASS까지 반복
+  4. 트리거 주석 4곳 해제: `useAnimator.ts`(2곳) · `DebugPanel.tsx` · `CompanionAvatar.tsx`
+  - 임계값 `WAVE_TARGETS`는 초기 추정치 — 실측 기준선(idle 이동폭 0.005 / 오른손짓 상완각 0.284)에 비춰 3단계에서 재보정 예상. 상세 [docs/wave-gesture-attempts.md](docs/wave-gesture-attempts.md)
+- [ ] **후속: `moods.ts` 분할** (747줄, 2026-08 기준) — 루프·idle포즈·제스처·타입·MOODS조립 5종 혼재로 응집 낮음. `anim/poses.ts`(idle 3종) / `anim/gestures.ts` / `moods.ts`(타입+톤+조립)로 **순수 이동 먼저**, 로직 변경은 다음 PR. **착수 시점은 다음 제스처/무드 추가 직전** — 지금은 안 아프므로 미리 건드리지 않는다(YAGNI). 현 구성은 `grep -n "^export" src/companion/anim/moods.ts`로 재확인
+- [ ] **후속: 테스트 확장** — 순수/준순수인데 미테스트: [store.ts](src/store.ts)(`setCharacter` 리셋·mesh patch) · [channels.ts](src/companion/anim/channels.ts)(채널→본 매핑 테이블) · [meshLabels.ts](src/editor/meshLabels.ts)(`LABEL_RULES` 매칭·fallback, 48줄 순수 규칙 = **최고 ROI**). `moods.ts` 분할 전 characterization으로 쓰면 일석이조
 - [x] **에디터 라이브 프리뷰** — 디버그 패널 없는 에디터에서 모션 확인. VRoid VRM엔 내장 클립이 없어 AnimationMixer 경로(빈 패널) 폐기 → 컴패니언과 동일한 절차 엔진(`useAnimator`) 재사용. `store.animPreview` 토글(기본 OFF=정적 편집 보존, 비퇴행), ON 시 ComposerAvatar가 idle 구동. AnimationPanel = 토글 + 무드/제스처/idle포즈 트리거(`companion:*` window 이벤트 공유, DebugPanel과 동일 경로). `useAnimator(…, enabled)` 4번째 인자로 게이팅
-- [ ] Phase 4: 스크린샷/내보내기 (애니메이션 미리보기는 위 라이브 프리뷰로 완료)
+- ❌ **폐기: Phase 4 스크린샷/내보내기** (2026-08-04 결정) — 초기 로드맵의 플레이스홀더 한 줄이 전부로, **명세된 적 없는 항목**이었다. 착수 전 해석을 4가지로 펼쳐 검토: A 캔버스 PNG 캡처 / B 조합 설정 JSON 저장·복원 / C 조립 VRM·GLB 익스포트 / D 컴패니언 투명 PNG. **전부 불필요 판정**. 근거: A·D는 OS 스크린샷으로 대체되고(차별점은 UI 없는 순수 렌더·DPR 고해상도·투명배경뿐인데 그 용도가 없음), C는 MToon·스프링본 보존 문제로 난이도만 높고 사용 맥락이 없으며, B는 아래 관찰에도 불구하고 요구되지 않음. **원칙②(실질 개선) 미달 → 안 만드는 것이 정답.** 오프라인 스크린샷이 필요하면 이미 있는 [scripts/renderThumbs.mjs](scripts/renderThumbs.mjs)(puppeteer + `?thumb=`) 경로를 쓴다.
+  - 📌 **부수 관찰(미해결로 남김)**: 영속성이 전무하다(`persist`/`localStorage` grep 0건). 새로고침하면 파츠 조합·메시별 색·셰이더·조명·그레이딩이 전부 초기값으로 소실된다. B가 이를 풀 수 있었으나 기능 자체가 불필요 판정이라 **의도적으로 남겨둔 상태**다. 향후 이 소실이 실제 불편으로 드러나면 그때 재검토(=신규 제안, 폐기 번복 아님).
 - 보류: per-제스처 손가락 매핑 — 300×400 프레임에선 지엽적이라 스킵 (전역 편안한 손으로 충분)
 
 ## TalkingHead 포팅 로드맵
@@ -280,7 +292,10 @@ VRM preset은 입 모양 5개(aa/ih/ou/ee/oh)지만, VRoid 모델의 추가 입 
 
 ## 주의사항
 
-- **개발 원칙** (신기능 시 준수): ①비퇴행 — 기존 동작 feature를 저해 금지. ②실질 개선 — "개발만 하면 됨" 금지, 체감되는 개선이어야. (rim·emission 컷, 그레이딩 화면 레이어 채택이 이 원칙의 사례)
+- **개발 원칙** (신기능 시 준수): ①비퇴행 — 기존 동작 feature를 저해 금지. ②실질 개선 — "개발만 하면 됨" 금지, 체감되는 개선이어야. (rim·emission 컷, 그레이딩 화면 레이어 채택, Phase 4 폐기가 이 원칙의 사례)
+- **문서 작성 기준** (docs/ 비대화 방지, 2026-08-04): ⓐ**git이 이미 기록한 것은 문서로 남기지 않는다** — 대체된 문서는 아카이브 배너보다 **삭제**가 낫다(`git log`에 있다). ⓑ**CLAUDE.md 한 줄로 들어가면 문서를 만들지 않는다** — 함정·불변식이 payload고 나머지는 서술이다. ⓒ`/project-methodology` **스킬 references와 중복되는 로컬 사본 금지**(스킬이 세션마다 원본을 싣는다). ⓓ판단 기준: "이 문서가 **다음 세션의 결정을 바꾸는가**?" 아니면 안 만들거나 버린다. ⓔ**새 문서는 이 파일에서 링크한다** — 미링크 문서는 새 세션이 발견하지 못해 사실상 없는 것과 같다
+- **현행 진단·계획 문서**: [docs/project-diagnosis-2026-08.md](docs/project-diagnosis-2026-08.md)(**⏳ 2026-08-31 만료 후 삭제** — 살아있는 할 일은 위 로드맵 `[ ]`로 이미 이전됨) · [docs/concepts.md](docs/concepts.md)(이 프로젝트에 쓰인 수학/3D 개념 설명)
+- **테스트 관례**: 소스 옆 `*.test.ts` 콜로케이션. vitest 심볼은 `import { describe, it, expect, vi } from 'vitest'`로 **명시**(전역 설정 없이 tsc 통과). 스케줄러는 `Math.random` 의존 → 테스트는 `vi.spyOn(Math,'random')` 고정 또는 스칼라(비-ranged) 클립으로 결정적 입력 사용. 대상은 순수 로직만(시각/렌더·React 글루는 수동 영역)
 - VRM CORS → `public/avatars/`에 위치시켜 same-origin 서빙
 - Three.js v0.170.x 고정 — drei v9, @pixiv/three-vrm v3 호환
 - Zustand에 Three.js 객체(VRM, Object3D) 절대 넣지 말 것 → module singleton 사용
@@ -307,7 +322,17 @@ VRM preset은 입 모양 5개(aa/ih/ou/ee/oh)지만, VRoid 모델의 추가 입 
   - Head `x`=숙임(끄덕), `y`=턴, `z`=기울임(갸웃). Chest `x`=호흡/앞뒤린·`y`=턴·`z`=좌우린
   - 손가락 curl=proximal/intermediate `z`(좌−/우+). 전역 편안한 손은 `Channels` 생성 시 1회 설정(클립이 안 건드려 유지)
 - **카메라 상단**: 본 추정 금지 → `Box3.setFromObject(scene).max.y`(헤어 실제 끝). 머리 잘림 방지
+- **컴패니언 해상도**: 오버레이가 에디터보다 거칠어 보이는 건 **버그 아님** — 고정 300×400에 같은 아바타를 그려 백버퍼 픽셀이 ~3배 적고(dpr 동일), fov 28 클로즈업이 이를 증폭한다. 또렷하게 하려면 `<Canvas dpr={[1,2.5]}>`로 **상한만** 올린다 — `DprGovernor`가 `initialDpr × factor`로 계산하므로 거버너와 충돌하지 않고 맞물린다(여유 시 또렷 / 부하 시 자동 강하)
 - **이징**: 짧은 동작(제스처)은 `ease: 2.5~3.5`(완만), 기본(snap)은 blink/idle용. 각진 로봇 느낌은 ease 낮춰 해결
+- **손동작은 육안 아닌 수치로 검증** ([probe.ts](src/companion/anim/probe.ts) · `npm run probe`): 팔 기하를 **Hips 로컬**로 재서 술어 판정(흔들림 주축·상완 정지도·하완 전방·손 높이·상완 이격). 손인사 5회 실패가 전부 "덜렁덜렁" 같은 육안 표현이라 수렴 못한 데서 도입([docs/wave-gesture-attempts.md](docs/wave-gesture-attempts.md)). 값 바꾸고 `npm run probe -- --gesture <i>` 로 즉시 판정 — 사람이 봐줄 필요 없음
+  - ⚠️ **`useMotionProbe`는 `vrm.update(delta)` 다음에 등록**(R3F는 등록 순서=실행 순서) — 안 그러면 스프링본 반영 전 자세를 잰다. 기준계가 Hips인 이유는 호흡(Chest)·포즈(Spine)가 Hips를 안 돌려서 — Chest 기준이면 호흡이 `hand.z`에 노이즈로 섞인다
+  - 실측 기준선: idle(차렷)=이동폭 0.005·손높이 −0.46 / 오른손짓=이동폭 0.119·상완각 0.284·**주축이 앞뒤(z)** (좌우 아님)
+  - ⚠️ **임계값은 자동 조정되지 않는다** — `WAVE_TARGETS`는 박힌 상수라 사람이 손으로만 바뀐다. **PASS를 얻으려고 임계를 낮추는 것 금지**(측정기를 끄는 것과 같다). "물리적으로 도달 불가능한 기준이었다"는 실측 근거가 있을 때만 조정하고, **조정 사실과 근거를 반드시 보고**한다. 요구받아도 두 경우를 구분해 제시한 뒤 판단을 받을 것 — 상세 [docs/wave-gesture-attempts.md](docs/wave-gesture-attempts.md) 「임계값 조정 규율」
+- **모션 레이어 = 데이터 무변경 소급 적용**: 자연스러움은 개별 클립 저작이 아니라 **스케줄러/apply 레이어**에서 전 클립에 소급 적용한다. 새 파라미터는 **기본값 no-op**(off일 때 기존 출력 바이트 동일)으로 두고 `useAnimator`에서만 활성 → 테스트는 config 미지정=off로 비퇴행 고정([scheduler.test.ts](src/companion/anim/scheduler.test.ts))
+  - **overlap(시차)**: `MotionConfig.overlap`(현재 35ms) × `channelDepth`(torso 0 · arm/head 1 · elbow 2)만큼 채널 시작을 지연 → 몸통→팔→손 proximal-to-distal lag. `tick`은 채널별 유효시각(`et = clock − offset`)으로 세그먼트를 **개별 탐색**하고 클립 수명은 `maxOffset`만큼 연장. **채널 소유·hold-last 불변**(타임라인만 밀림)
+  - **smooth(정착)**: `MotionConfig.smooth`(현재 0.7)로 본 채널 이징을 `baseEasing`↔`smootherstep` 블렌드. **오버슈트/anticipation 금지** — 시도 후 "각진 군인" 느낌으로 반려됨([[motion-smoothness-not-overshoot]]). 부드러움은 오버슈트가 아니라 양 끝 도함수 0으로 얻는다
+  - **얼굴 채널 제외**: `isFacial`(blink/`emo.*`)은 overlap·smooth 미적용, 항상 sigmoid — 표정은 이벤트와 **동기**돼야 함
+  - **micro-drift**: [channels.ts](src/companion/anim/channels.ts) `DRIFT` 맵(채널별 [주파수, 위상, 진폭≈0.005~0.008rad])의 초저주파 sine을 `apply(state, t)`에서 최종 euler에 상시 가산 → hold 구간(제스처 정지·포즈 유지)도 살아있음. 활성 모션 땐 진폭에 묻혀 **hold 감지 불필요**. ⚠️ `tick` 반환 state는 `scheduler.live` **동일 참조 → mutate 금지**(drift는 euler 로컬에만 가산, hold-last 비오염). 제외=머리(이미 미동)·얼굴(표정 동기)·`chest.inhale`(이미 진동). 주기는 서로 안 맞아떨어지게(≈5~12s) 배치해 반복감 제거. `DRIFT_AMP=0`이면 완전 무영향
 - **lookAt rangeMap**: VRoid 기본 inputMax 90은 정면 시선이 거의 0 → `useLookAt`에서 수평만 보정. 수직 보정 시 눈 내리깖(카메라가 가슴 높이라 하향각 포화)
 - **제스처 추가**: `anim/moods.ts` GESTURES 배열에 `{label, ease, dt:[out,hold,back], vs:[out,hold,rest]}` 항목 추가 → DebugPanel 버튼 자동 생성. 손은 상반신 프레임 하단이라 큰 손짓보다 절제된 동작이 적합
 - **held 표정 vs 일회성 표정**: 한 채널은 둘 중 하나만 소유. held(무드 유지)는 `MOODS[m].expression` → `moodExprClip`(EMOTION_CHANNELS 중 `ONESHOT_EMOTION_CHANNELS` 제외분). 일회성(진입 1회 후 0 복귀)은 `useAnimator`의 전용 클립 + 해당 채널을 held에서 제외. 현재 일회성: surprised 입벌림(`emo.mthSurprised`/SURPRISE_GASP), happy 눈웃음(`emo.eyeJoy`/HAPPY_EYE). 발화 내내 같은 부위가 고정되면 안 되는 표정은 이 패턴으로(눈감김·입벌림). happy처럼 부위 결합 preset이 문제면 부위 모프(`Fcl_MTH_*`/`Fcl_EYE_*`/`Fcl_BRW_*`)로 분해

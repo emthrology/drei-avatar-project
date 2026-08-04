@@ -48,13 +48,14 @@
 - `store.ts`에 `GradingParams` + `GRADING_DEFAULTS`(무변화) + `setGrading` 추가
 
 ### 3단계 — 에디터 적용 (먼저, 안전)
-- `AvatarScene`(불투명 배경 #1a1a2e)에 `<EffectComposer>` 추가 → **투명도 이슈 없음**
+- 에디터 씬(불투명 배경 #1a1a2e)에 `<EffectComposer>` 추가 → **투명도 이슈 없음**
+  - ※ 당시 파일명은 `AvatarScene`. 이후 에디터 조립 전환으로 삭제됐고 현재는 [EditorScene.tsx](../src/editor/EditorScene.tsx)가 그 자리 — 실제 EffectComposer는 [GradingEffects.tsx](../src/components/GradingEffects.tsx)로 분리돼 양 씬이 공유한다
 - `GradingPanel` 슬라이더 → 즉시 톤 변화 확인
 - 빌드/육안 검증
 
 ### 4단계 — 컴패니언 확장 (검증 후)
 - 컴패니언 Canvas는 **투명 배경(`alpha:true`)** → EffectComposer가 알파를 깨뜨릴 수 있음. 알파 통과(`<EffectComposer>` 알파 처리 + 효과별 blend) 검증 필요
-- 풀스크린 패스 = 게임 위 오버레이엔 비용 → 검증 후 판단 ([docs/drei-opportunities.md]의 성능 자동조절과 연계 가능)
+- 풀스크린 패스 = 게임 위 오버레이엔 비용 → 검증 후 판단 (성능 자동조절과 연계 가능 — 현재는 `DprGovernor`로 구현됨, CLAUDE.md 참조)
 - 안 되면 **에디터 전용으로 확정**(원칙2: 억지로 넣지 않음)
 
 ## 폐기 기록 — MToon 머티리얼별 튜닝 (male_sample.vrm 파싱 검증)
