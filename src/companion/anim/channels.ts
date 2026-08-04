@@ -60,6 +60,23 @@ export const BASELINE: Record<string, number> = {
   'elbowR.x': 0,
   'elbowR.y': 0,
   'elbowR.z': 0,
+  // ★뼈 자기 축(길이축) 기준 롤 — 상완 내/외회전, 하완 회내/회외(supination).
+  // euler XYZ 로는 표현 불가: R=Rx·Ry·Rz 라 굴곡(z)이 가장 안쪽에 적용되고 x·y 는 그 뒤에
+  // **부모 고정축** 기준으로 돌아, 팔꿈치를 접은 뒤엔 하완을 '휘두를' 뿐 축 회전이 아니다.
+  // → euler 뒤에 뼈 길이축 axis-angle 을 post-multiply 해서 로컬 프레임 롤로 적용한다.
+  // 기본 0 = 회전 없음(비퇴행).
+  'armL.twist': 0,
+  'armR.twist': 0,
+  'elbowL.twist': 0,
+  'elbowR.twist': 0,
+  // 손목(Hand). 손인사 좌우 흔들기는 실제로 손목 flick 이 주도한다 — 상완/팔꿈치만으로
+  // 만들려다 커플링으로 5회 실패(docs/wave-gesture-attempts.md). 기본 0 = 영향 없음.
+  'handL.x': 0,
+  'handL.y': 0,
+  'handL.z': 0,
+  'handR.x': 0,
+  'handR.y': 0,
+  'handR.z': 0,
 };
 
 // chest.inhale(0~1) → 가슴 본 X회전 스케일 (기존 useIdleAnimation 0.015 진폭 보존)
@@ -144,7 +161,12 @@ export class Channels {
   private armR: THREE.Object3D | null;
   private elbowL: THREE.Object3D | null;
   private elbowR: THREE.Object3D | null;
+  private handL: THREE.Object3D | null;
+  private handR: THREE.Object3D | null;
   private _euler = new THREE.Euler();
+  private _q = new THREE.Quaternion();
+  // 각 뼈의 로컬 길이축 (자식 뼈의 로컬 위치 방향) — 롤 회전축. 리그 비의존으로 실측한다.
+  private axes = new Map<THREE.Object3D, THREE.Vector3>();
   // 이 모델에 실제 존재하는 감정 채널만 (비VRoid 누락 대비, 1회 감지)
   private emotions: [string, VRMExpressionPresetName][] = [];
   // 눈썹 강조: 채널 → 해당 모프를 가진 메시/인덱스 목록 (직접 morphTargetInfluences)
@@ -170,6 +192,13 @@ export class Channels {
     this.armR = h.getNormalizedBoneNode(VRMHumanBoneName.RightUpperArm);
     this.elbowL = h.getNormalizedBoneNode(VRMHumanBoneName.LeftLowerArm);
     this.elbowR = h.getNormalizedBoneNode(VRMHumanBoneName.RightLowerArm);
+    this.handL = h.getNormalizedBoneNode(VRMHumanBoneName.LeftHand);
+    this.handR = h.getNormalizedBoneNode(VRMHumanBoneName.RightHand);
+    // 롤 축 = 자식 뼈의 로컬 위치 방향 (그 뼈가 뻗은 방향 = 길이축)
+    this.setAxis(this.armL, this.elbowL);
+    this.setAxis(this.armR, this.elbowR);
+    this.setAxis(this.elbowL, this.handL);
+    this.setAxis(this.elbowR, this.handR);
     this.curlFingers();
 
     // 존재하는 감정 preset만 수집 → apply에서 누락 모델 안전
@@ -235,6 +264,23 @@ export class Channels {
             1,
           )
         : 0;
+  }
+
+  // 길이축 등록: 자식의 로컬 위치가 곧 이 뼈가 뻗은 방향. 길이 0(겹친 뼈)이면 롤 불가 → 미등록.
+  private setAxis(bone: THREE.Object3D | null, child: THREE.Object3D | null): void {
+    if (!bone || !child) return;
+    const axis = child.position.clone();
+    if (axis.lengthSq() < 1e-12) return;
+    this.axes.set(bone, axis.normalize());
+  }
+
+  // euler 회전 뒤에 길이축 롤을 **post-multiply** → 뼈의 로컬 프레임에서 도는 진짜 비틀기.
+  // (pre-multiply 하면 부모 축 기준이라 지금까지처럼 팔이 휘둘린다.)
+  private twist(bone: THREE.Object3D | null, angle: number): void {
+    if (!bone || !angle) return;
+    const axis = this.axes.get(bone);
+    if (!axis) return;
+    bone.quaternion.multiply(this._q.setFromAxisAngle(axis, angle));
   }
 
   // 전역 편안한 손: 네 손가락 proximal/intermediate를 손바닥쪽으로 살짝 말아둠 (로드 1회).
@@ -308,6 +354,7 @@ export class Channels {
         v('armL.z') + d('armL.z'),
       );
       this.armL.quaternion.setFromEuler(this._euler);
+      this.twist(this.armL, v('armL.twist'));
     }
     if (this.armR) {
       this._euler.set(
@@ -316,6 +363,7 @@ export class Channels {
         v('armR.z') + d('armR.z'),
       );
       this.armR.quaternion.setFromEuler(this._euler);
+      this.twist(this.armR, v('armR.twist'));
     }
     if (this.elbowL) {
       this._euler.set(
@@ -324,6 +372,7 @@ export class Channels {
         v('elbowL.z') + d('elbowL.z'),
       );
       this.elbowL.quaternion.setFromEuler(this._euler);
+      this.twist(this.elbowL, v('elbowL.twist'));
     }
     if (this.elbowR) {
       this._euler.set(
@@ -332,6 +381,17 @@ export class Channels {
         v('elbowR.z') + d('elbowR.z'),
       );
       this.elbowR.quaternion.setFromEuler(this._euler);
+      this.twist(this.elbowR, v('elbowR.twist'));
+    }
+    // 손목 — normalized 리그의 rest 는 identity 라 전 채널 0이면 기록해도 무변화(비퇴행).
+    // drift 미적용(손목 미세진동은 상완 drift가 FK로 이미 전달).
+    if (this.handL) {
+      this._euler.set(v('handL.x'), v('handL.y'), v('handL.z'));
+      this.handL.quaternion.setFromEuler(this._euler);
+    }
+    if (this.handR) {
+      this._euler.set(v('handR.x'), v('handR.y'), v('handR.z'));
+      this.handR.quaternion.setFromEuler(this._euler);
     }
 
     const blink = v('blink');

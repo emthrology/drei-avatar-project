@@ -233,12 +233,8 @@ VRM 로드 흐름(업로드 오버라이드): 파일 선택 → `URL.createObjec
 - [x] **모션 자연스러움 — 탈로봇 (overlap/smootherstep + micro-drift + idle 다양화)** — 3단계. ①`scheduler.ts` `MotionConfig{overlap,smooth}`(기본 0=off, 바이트 동일): 채널 운동학적 깊이(torso 0→arm/head 1→elbow 2)만큼 시작 시각을 미뤄 몸통→팔→손 시차 + 본 채널 이징을 smootherstep로 블렌드. **오버슈트는 시도 후 반려**("각진 군인" 피드백) → `moods.ts` 데이터 무변경으로 전 클립 소급 적용. ②`channels.ts` micro-drift: 초저주파 sine을 apply-레이어에서 가산해 hold 구간 "얼어붙음" 제거. ③`IDLE_ARM_POSES`에 앞으로모으기 추가 + 차렷 확률 0.72→0.55(팔짱·한손잡기는 클리핑으로 반려). 상세 [docs/motion-naturalness-plan.md](docs/motion-naturalness-plan.md) · 보류 기록 [docs/wave-gesture-attempts.md](docs/wave-gesture-attempts.md)
 - [ ] **후속: IK 도입** — 손이 보이는 제스처(손가슴 등) 정밀화. CCDIKSolver 채널 추상화. 상세 [docs/ik-plan.md](docs/ik-plan.md)
 - [ ] **후속: 하반신 무게이동** — 현 `pose` 루프는 Spine만 회전(액티브함 구조적 천장). Hips/UpperLeg/LowerLeg 축 검증 후 `hips.*`/`knee.*` 채널 신설. 신규 본/채널 회귀 위험으로 보류 ([docs/motion-naturalness-plan.md](docs/motion-naturalness-plan.md) 4번)
-- [ ] **🔨 진행 중: 손인사(wave) 재개** — 2026-07-08 FK 5회 실패 후 보류했다가 **검증 방식을 바꿔 재개**(2026-08-04). 지난 실패의 근본 원인은 축 지식 부족이 아니라 "값 수정 → 사람이 육안 확인 → 피드백" 루프였음 → **수치 프로브 도입 완료**(`npm run probe`, 위 「손동작은 육안 아닌 수치로 검증」). **다음 세션은 여기서 시작**:
-  1. **`RightHand` 본 축 실측** — 값 넣고 `npm run probe`로 어느 축이 좌우 흔들기인지 확인. **추측 금지, 측정**(기존 UpperArm/LowerArm 축은 검증됐으나 Hand는 미검증)
-  2. `channels.ts`에 `handR.*` 채널 신설 (현재 손가락 16본은 있으나 **손목 본은 채널 없음**)
-  3. `moods.ts:456` `WAVE` 주석 해제 → 손목 주도로 재작성(팔은 정적, 손만 flick) → 프로브 PASS까지 반복
-  4. 트리거 주석 4곳 해제: `useAnimator.ts`(2곳) · `DebugPanel.tsx` · `CompanionAvatar.tsx`
-  - 임계값 `WAVE_TARGETS`는 초기 추정치 — 실측 기준선(idle 이동폭 0.005 / 오른손짓 상완각 0.284)에 비춰 3단계에서 재보정 예상. 상세 [docs/wave-gesture-attempts.md](docs/wave-gesture-attempts.md)
+- [x] **손인사(wave) — 완료** (2026-08-04) — FK 5회 실패 후 보류했다가 **검증 방식을 바꿔** 재개해 완료. 양 캐릭터에서 프로브 6개 지표 전부 PASS. 푼 열쇠 2개: ①**흔들기를 손목으로 이관** → `armR.y`(상완 롤)가 자세 전용으로 free 해져 커플링 해소 ②**육안 → 수치 검증**. 부산물: `handR.*`·`*.twist` 채널 신설, 프로브 지표 3종 추가(몸통이격·손바닥 바깥/정면), `--char`/`--wave`/`--wait` 플래그, 필름스트립 [scripts/waveShots.mjs](scripts/waveShots.mjs). **임계값은 하나도 안 바꿨다**(바꾼 건 측정 지점·구간뿐). 상세 [docs/wave-gesture-attempts.md](docs/wave-gesture-attempts.md)
+- [ ] **🔎 다음 손동작 착수 전 필독: VRMA(표준 모션 포맷) 검토** — 손인사 1개에 실패 5회+재개 1세션이 든 건 절차 FK 저작의 구조적 비용(축 매핑이 자세 종속·euler 커플링·캐릭터별 재튜닝). `.vrma`는 **같은 파일을 어떤 VRM에도** 적용(자동 리타게팅)하고, `@pixiv/three-vrm-animation@3.5.3`이 우리 three-vrm과 **버전 정확히 일치**하며, VRoid 공식 **무료 7종에 "인사"가 포함**. ⚠️ 드롭인 아님 — `AnimationMixer`가 본을 통째로 몰아 **채널 단일 소유와 충돌**한다(양보 메커니즘이 설계 과제). 착수 순서·출처 [docs/vrma-adoption.md](docs/vrma-adoption.md)
 - [ ] **후속: `moods.ts` 분할** (747줄, 2026-08 기준) — 루프·idle포즈·제스처·타입·MOODS조립 5종 혼재로 응집 낮음. `anim/poses.ts`(idle 3종) / `anim/gestures.ts` / `moods.ts`(타입+톤+조립)로 **순수 이동 먼저**, 로직 변경은 다음 PR. **착수 시점은 다음 제스처/무드 추가 직전** — 지금은 안 아프므로 미리 건드리지 않는다(YAGNI). 현 구성은 `grep -n "^export" src/companion/anim/moods.ts`로 재확인
 - [ ] **후속: 테스트 확장** — 순수/준순수인데 미테스트: [store.ts](src/store.ts)(`setCharacter` 리셋·mesh patch) · [channels.ts](src/companion/anim/channels.ts)(채널→본 매핑 테이블) · [meshLabels.ts](src/editor/meshLabels.ts)(`LABEL_RULES` 매칭·fallback, 48줄 순수 규칙 = **최고 ROI**). `moods.ts` 분할 전 characterization으로 쓰면 일석이조
 - [x] **에디터 라이브 프리뷰** — 디버그 패널 없는 에디터에서 모션 확인. VRoid VRM엔 내장 클립이 없어 AnimationMixer 경로(빈 패널) 폐기 → 컴패니언과 동일한 절차 엔진(`useAnimator`) 재사용. `store.animPreview` 토글(기본 OFF=정적 편집 보존, 비퇴행), ON 시 ComposerAvatar가 idle 구동. AnimationPanel = 토글 + 무드/제스처/idle포즈 트리거(`companion:*` window 이벤트 공유, DebugPanel과 동일 경로). `useAnimator(…, enabled)` 4번째 인자로 게이팅
@@ -318,7 +314,9 @@ VRM preset은 입 모양 5개(aa/ih/ou/ee/oh)지만, VRoid 모델의 추가 입 
 - **hold-last**: `tick`은 baseline이 아닌 직전 출력(live)에서 시작 → 클립 미기록 채널은 유지. 동작 종료 시 vs를 rest로 끝내야 복귀(안 그러면 그 자세로 멈춤)
 - **VRM normalized 본 회전축 (male_sample 전부 시각 검증)**:
   - UpperArm `z`=프론탈 들기/내리기(팔내리기 ∓1.3), `x`=앞뒤 스윙(**음수=앞**/양수=뒤)
-  - LowerArm 팔꿈치굽힘=`z`(왼쪽−/오른쪽+, ~−1.7로 손이 가슴까지). **X/Y 아님**(Y는 길이축 roll=안 보임)
+  - LowerArm 팔꿈치굽힘=`z`(왼쪽−/오른쪽+, ~−1.7로 손이 가슴까지). **X/Y 아님**
+  - ⚠️ `elbow.x`/`elbow.y`는 **롤이 아니다** — 팔을 내렸을 때만 롤처럼 보인다. 팔꿈치를 접은 뒤엔 하완을 **휘두른다**(실측: 손이 허리↔목으로 이동)
+  - **굴곡된 팔의 롤은 euler로 표현 불가** — `R=Rx·Ry·Rz`라 굴곡(z)이 안쪽에 먼저 적용되고 x·y는 **부모 고정축** 기준으로 돈다. 손바닥 방향(회외)·상완 내외회전은 반드시 **`*.twist` 채널**(뼈 길이축 axis-angle을 euler 뒤에 post-multiply, [channels.ts](src/companion/anim/channels.ts))로. 기본 0 = 기존 동작 바이트 동일
   - Head `x`=숙임(끄덕), `y`=턴, `z`=기울임(갸웃). Chest `x`=호흡/앞뒤린·`y`=턴·`z`=좌우린
   - 손가락 curl=proximal/intermediate `z`(좌−/우+). 전역 편안한 손은 `Channels` 생성 시 1회 설정(클립이 안 건드려 유지)
 - **카메라 상단**: 본 추정 금지 → `Box3.setFromObject(scene).max.y`(헤어 실제 끝). 머리 잘림 방지
@@ -326,7 +324,9 @@ VRM preset은 입 모양 5개(aa/ih/ou/ee/oh)지만, VRoid 모델의 추가 입 
 - **이징**: 짧은 동작(제스처)은 `ease: 2.5~3.5`(완만), 기본(snap)은 blink/idle용. 각진 로봇 느낌은 ease 낮춰 해결
 - **손동작은 육안 아닌 수치로 검증** ([probe.ts](src/companion/anim/probe.ts) · `npm run probe`): 팔 기하를 **Hips 로컬**로 재서 술어 판정(흔들림 주축·상완 정지도·하완 전방·손 높이·상완 이격). 손인사 5회 실패가 전부 "덜렁덜렁" 같은 육안 표현이라 수렴 못한 데서 도입([docs/wave-gesture-attempts.md](docs/wave-gesture-attempts.md)). 값 바꾸고 `npm run probe -- --gesture <i>` 로 즉시 판정 — 사람이 봐줄 필요 없음
   - ⚠️ **`useMotionProbe`는 `vrm.update(delta)` 다음에 등록**(R3F는 등록 순서=실행 순서) — 안 그러면 스프링본 반영 전 자세를 잰다. 기준계가 Hips인 이유는 호흡(Chest)·포즈(Spine)가 Hips를 안 돌려서 — Chest 기준이면 호흡이 `hand.z`에 노이즈로 섞인다
-  - 실측 기준선: idle(차렷)=이동폭 0.005·손높이 −0.46 / 오른손짓=이동폭 0.119·상완각 0.284·**주축이 앞뒤(z)** (좌우 아님)
+  - 지표 9종: 흔들림 주축·이동폭(둘 다 **손끝** 기준 — 손목 회전은 손목 관절을 못 움직여 손목에서 재면 항상 0) · 상완 정지도 · 하완 전방 · 손 높이 · 상완 이격 · **몸통이격**(하완이 몸통에 파묻힘) · **손바닥 바깥/정면**(palmOut/palmFwd — 인사는 정면이 목표, 측면만 키우면 손이 날로 서서 안 보임)
+  - 플래그: `--wave`(손인사) · `--gesture 1,2,3`(한 세션에서 일괄 — vite 기동 1회) · `--char female1`(**캐릭터마다 값이 다르다, 양쪽 검증 필수**) · `--wait`(팔 드는 전환 구간 제외; 포함하면 어떤 동작도 '상완 덜렁거림'으로 불합격)
+  - **프로브가 못 재는 것 = 자세가 인사처럼 보이는가.** 지표 6개를 다 통과하고도 참고 이미지와 전혀 다른 자세('만세')였던 적이 있다 → 눈=방향 교정 / 프로브=회귀 감시로 역할을 나눈다. 필름스트립 [scripts/waveShots.mjs](scripts/waveShots.mjs)(`--char`·`--gesture` 지원, DebugPanel 자동 숨김)
   - ⚠️ **임계값은 자동 조정되지 않는다** — `WAVE_TARGETS`는 박힌 상수라 사람이 손으로만 바뀐다. **PASS를 얻으려고 임계를 낮추는 것 금지**(측정기를 끄는 것과 같다). "물리적으로 도달 불가능한 기준이었다"는 실측 근거가 있을 때만 조정하고, **조정 사실과 근거를 반드시 보고**한다. 요구받아도 두 경우를 구분해 제시한 뒤 판단을 받을 것 — 상세 [docs/wave-gesture-attempts.md](docs/wave-gesture-attempts.md) 「임계값 조정 규율」
 - **모션 레이어 = 데이터 무변경 소급 적용**: 자연스러움은 개별 클립 저작이 아니라 **스케줄러/apply 레이어**에서 전 클립에 소급 적용한다. 새 파라미터는 **기본값 no-op**(off일 때 기존 출력 바이트 동일)으로 두고 `useAnimator`에서만 활성 → 테스트는 config 미지정=off로 비퇴행 고정([scheduler.test.ts](src/companion/anim/scheduler.test.ts))
   - **overlap(시차)**: `MotionConfig.overlap`(현재 35ms) × `channelDepth`(torso 0 · arm/head 1 · elbow 2)만큼 채널 시작을 지연 → 몸통→팔→손 proximal-to-distal lag. `tick`은 채널별 유효시각(`et = clock − offset`)으로 세그먼트를 **개별 탐색**하고 클립 수명은 `maxOffset`만큼 연장. **채널 소유·hold-last 불변**(타임라인만 밀림)

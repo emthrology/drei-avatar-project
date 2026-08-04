@@ -14,8 +14,7 @@ import {
   type ChannelValues,
 } from './scheduler';
 import { Channels, BASELINE, EMOTION_CHANNELS } from './channels';
-import { MOODS, IDLE_POSES, TONE_LOOP_NAMES } from './moods';
-// ⏸️ WAVE(손인사) 보류 — docs/wave-gesture-attempts.md. 재개 시 './moods'에서 WAVE import 복구.
+import { MOODS, IDLE_POSES, TONE_LOOP_NAMES, WAVE } from './moods';
 
 // 일회성 클립이 전담하는 채널은 held 표정(moodExprClip)에서 제외 — 채널 단일 소유:
 // emo.mthSurprised=surprised gasp(입벌림), emo.eyeJoy=happy 진입 눈웃음(감았다 뜸).
@@ -68,14 +67,14 @@ export function useAnimator(
   stateRef: React.RefObject<StateName>,
   moodRef: React.RefObject<string>,
   enabled = true,
-  // ⏸️ 손인사 보류: greetOnReady 파라미터 제거(재개 시 복구 — docs/wave-gesture-attempts.md)
+  greetOnReady = false, // 등장 시 손인사 1회
 ) {
   const schedulerRef = useRef<AnimScheduler | null>(null);
   const channelsRef = useRef<Channels | null>(null);
   const builtVrmRef = useRef<VRM | null>(null);
   const prevStateRef = useRef<StateName>('idle');
   const driftTRef = useRef(0); // idle micro-drift 위상 누적 시간(초)
-  // ⏸️ 손인사 보류: manualWaveRef 제거 (재개 시 복구 — docs/wave-gesture-attempts.md)
+  const manualWaveRef = useRef(false); // 디버그 패널 손인사 트리거 대기
   // 무드 이중 소스: prop(게임 이벤트) + 디버그 이벤트. 변경 감지를 분리해 서로 안 덮음
   const propMoodSeenRef = useRef<string>('neutral'); // 마지막으로 관측한 prop 무드
   const activeMoodRef = useRef<string>('neutral'); // 현재 표시 중인 무드 (gesture 풀 소스)
@@ -99,14 +98,18 @@ export function useAnimator(
       const idx = (e as CustomEvent).detail?.index;
       if (typeof idx === 'number') manualIdlePoseRef.current = idx;
     };
-    // ⏸️ 손인사 보류: onWave 리스너 제거 (재개 시 복구 — docs/wave-gesture-attempts.md)
+    const onWave = () => {
+      manualWaveRef.current = true;
+    };
     window.addEventListener('companion:gesture', onGesture);
     window.addEventListener('companion:mood', onMood);
     window.addEventListener('companion:idlepose', onIdlePose);
+    window.addEventListener('companion:wave', onWave);
     return () => {
       window.removeEventListener('companion:gesture', onGesture);
       window.removeEventListener('companion:mood', onMood);
       window.removeEventListener('companion:idlepose', onIdlePose);
+      window.removeEventListener('companion:wave', onWave);
     };
   }, []);
 
@@ -129,8 +132,7 @@ export function useAnimator(
         smooth: 0.7,
       });
       MOODS.neutral.loops.forEach((t) => scheduler.add(t, true));
-      // ⏸️ 등장 손인사 보류 (재개 시 복구 — docs/wave-gesture-attempts.md):
-      //   if (greetOnReady) scheduler.add({ ...WAVE, delay: [700, 900] }, false);
+      if (greetOnReady) scheduler.add({ ...WAVE, delay: [700, 900] }, false);
       schedulerRef.current = scheduler;
       channelsRef.current = new Channels(vrm);
       propMoodSeenRef.current = 'neutral'; // 새 VRM은 neutral 표정으로 시작
@@ -211,12 +213,11 @@ export function useAnimator(
       }
     }
 
-    // ⏸️ 손인사 수동 트리거 보류 (재개 시 복구 — docs/wave-gesture-attempts.md):
-    //   if (manualWaveRef.current) {
-    //     manualWaveRef.current = false;
-    //     scheduler.remove('wave');
-    //     scheduler.add(WAVE, false);
-    //   }
+    if (manualWaveRef.current) {
+      manualWaveRef.current = false;
+      scheduler.remove('wave');
+      scheduler.add(WAVE, false);
+    }
 
     // idle→speaking 전환 시 현재 무드 세트에서 1개 랜덤 제스처 (확률 + 중복 방지)
     const moodGestures = (MOODS[activeMoodRef.current] ?? MOODS.neutral)
