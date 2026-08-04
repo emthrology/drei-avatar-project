@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "assets": "node scripts/extractParts.mjs && node scripts/renderThumbs.mjs",
     "extract": "node scripts/extractParts.mjs",
-    "thumbs": "node scripts/renderThumbs.mjs"
+    "thumbs": "node scripts/renderThumbs.mjs",
+    "probe": "node scripts/probeMotion.mjs"
   },
   "dependencies": {
     "@pixiv/three-vrm": "^3.5.3",

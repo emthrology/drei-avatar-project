@@ -4,6 +4,7 @@ import { VRM, VRMHumanBoneName } from '@pixiv/three-vrm'
 import * as THREE from 'three'
 import { useLipsync } from './useLipsync'
 import { useAnimator } from './anim/useAnimator'
+import { useMotionProbe } from './anim/useMotionProbe'
 import { type StateName } from './anim/scheduler'
 import { useLookAt } from './useLookAt'
 import { type SpeakPayload } from './tts'
@@ -94,6 +95,9 @@ export function CompanionAvatar({ uploadUrl, speaking, mood, onReady, onCameraRe
     v.update(delta)
     syncFace() // 얼굴 교체 시: base 표정/립싱크/시선 → 교체된 Face 미러
   })
+
+  // 손동작 수치 프로브 — 위 vrm.update 다음에 등록해야 최종 자세를 잰다 (등록 순서 = 실행 순서)
+  useMotionProbe(vrmRef)
 
   if (!vrm) return null
   return <primitive object={vrm.scene} />

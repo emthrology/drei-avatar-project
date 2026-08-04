@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { type Lang, type Gender } from './locales'
 import { MOODS, IDLE_POSES } from './anim/moods'
+import type { ProbeResult } from './anim/useMotionProbe'
 
 // 제스처 라벨 목록 (수동 트리거 버튼용). 인덱스가 MOODS.neutral.gestures와 일치
 const GESTURE_LABELS = MOODS.neutral.gestures.map((g, i) => g.label ?? `제스처 ${i}`)
@@ -28,6 +29,12 @@ function triggerIdlePose(index: number) {
 //   window.dispatchEvent(new CustomEvent('companion:wave'))
 // }
 
+// 손동작 수치 프로브 — ms 동안 팔 기하를 샘플링해 판정(anim/probe.ts).
+// 육안 대신 수치로 보므로 "덜렁덜렁" 같은 표현이 어느 지표 불합격인지로 환원된다.
+function triggerProbe(ms = 3000, side: 'L' | 'R' = 'R') {
+  window.dispatchEvent(new CustomEvent('companion:probe', { detail: { ms, side } }))
+}
+
 interface Props {
   status: 'loading' | 'ready' | 'speaking'
   lastText: string
@@ -53,6 +60,18 @@ const LANGS: Lang[] = ['en', 'ko']
 export function DebugPanel({ status, lastText, lang, gender, onEvent, onLangChange, onGenderChange, onAvatarLoad }: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [loadedLabel, setLoadedLabel] = useState<string | null>(null)
+  const [probe, setProbe] = useState<ProbeResult | { error: string } | null>(null)
+  const [probing, setProbing] = useState(false)
+
+  // 프로브 결과 수신 (useMotionProbe → window 이벤트, R3F 경계 우회 — 기존 관례)
+  useEffect(() => {
+    const onDone = (e: Event) => {
+      setProbe((e as CustomEvent).detail)
+      setProbing(false)
+    }
+    window.addEventListener('companion:probe:done', onDone)
+    return () => window.removeEventListener('companion:probe:done', onDone)
+  }, [])
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -231,6 +250,49 @@ export function DebugPanel({ status, lastText, lang, gender, onEvent, onLangChan
           </button>
         ))}
       </div>
+
+      <hr style={{ border: 'none', borderTop: '1px solid #333', margin: '8px 0' }} />
+
+      {/* 손동작 수치 프로브 — 육안 대신 지표로 판정 (docs/wave-gesture-attempts.md 실패 5건을 술어화) */}
+      <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>Motion Probe (손동작 수치 검증)</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+        {(['R', 'L'] as const).map((side) => (
+          <button
+            key={side}
+            disabled={probing}
+            onClick={() => { setProbing(true); setProbe(null); triggerProbe(3000, side) }}
+            style={{
+              background: probing ? '#374151' : '#7c2d12', color: '#fed7aa',
+              border: '1px solid #ea580c', borderRadius: 6,
+              padding: '4px 8px', cursor: probing ? 'default' : 'pointer', fontSize: 11,
+            }}
+          >
+            {probing ? '측정 중…' : `${side}팔 3초 측정`}
+          </button>
+        ))}
+      </div>
+
+      {probe && 'error' in probe && (
+        <div style={{ fontSize: 11, color: '#f87171' }}>❌ {probe.error}</div>
+      )}
+
+      {probe && !('error' in probe) && (
+        <div style={{ fontSize: 10, lineHeight: 1.6 }}>
+          <div style={{ color: probe.pass ? '#4ade80' : '#f87171', fontWeight: 600, marginBottom: 4 }}>
+            {probe.pass ? '✅ PASS' : '❌ FAIL'} · {probe.side}팔 · {probe.sampleCount}샘플 / {probe.durationMs}ms
+          </div>
+          {probe.checks.map((c) => (
+            <div key={c.name} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+              <span style={{ color: c.pass ? '#4ade80' : '#f87171' }}>
+                {c.pass ? '✓' : '✗'} {c.name}
+              </span>
+              <span style={{ color: '#94a3b8', fontFamily: 'monospace' }}>
+                {c.value} <span style={{ color: '#64748b' }}>({c.want})</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -4,8 +4,14 @@ import { CompanionOverlay } from './companion/CompanionOverlay'
 import { DebugPanel } from './companion/DebugPanel'
 import { type Lang, type Gender } from './companion/locales'
 
+// ?mode=companion — 툴링(scripts/probeMotion.mjs)이 클릭 없이 컴패니언으로 진입하는 경로.
+// 기본값은 editor 그대로라 사람 사용엔 무변화(비퇴행).
+function initialMode(): 'editor' | 'companion' {
+  return new URLSearchParams(window.location.search).get('mode') === 'companion' ? 'companion' : 'editor'
+}
+
 export default function App() {
-  const [mode, setMode] = useState<'editor' | 'companion'>('editor')
+  const [mode, setMode] = useState<'editor' | 'companion'>(initialMode)
   const [lang, setLang] = useState<Lang>('en')
   const [gender, setGender] = useState<Gender>('male') // 번들 샘플이 남성 → 기본 male
 
