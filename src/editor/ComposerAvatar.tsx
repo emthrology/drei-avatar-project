@@ -9,6 +9,7 @@ import { useAvatarStore, threeColorToHex, type MeshInfo } from '../store'
 import { labelForMaterialName } from './meshLabels'
 import { useAnimator } from '../companion/anim/useAnimator'
 import type { StateName } from '../companion/anim/scheduler'
+import { useVrmaLayer } from '../companion/anim/vrma/useVrmaLayer'
 
 // 에디터 조립 아바타 — 공유 조립 엔진(useAssembledVrm)에 drei 에디터 정책을 얹는다:
 // 정적 rest pose(프리뷰 OFF) · frameUpperBody 카메라 · meshInfos 색 편집.
@@ -39,6 +40,10 @@ export function ComposerAvatar({ baseUrl, catalog }: Props) {
   const stateRef = useRef<StateName>('idle')
   const moodRef = useRef<string>('neutral')
   useAnimator(vrmRef, stateRef, moodRef, animPreview)
+
+  // VRMA 제스처 레이어 — useAnimator 뒤 · v.update 앞에 등록(절차 기록 → 덮어쓰기 → springBone).
+  // 프리뷰 OFF 여도 활성: 정적 편집 화면에서 제스처만 확인할 수 있게(끝나면 rest pose 로 복귀).
+  useVrmaLayer(vrmRef)
 
   // ─── 로드 시 meshInfos 목록 수집 (색 패널 리스트용) ─────────────────────────────
   // 셰이더·메시 색 적용은 공유 훅(useAssembledVrm)이 담당(컴패니언과 동일 경로).

@@ -28,7 +28,6 @@ function arg(name, fallback) {
 const has = (name) => process.argv.includes(`--${name}`)
 
 const SIDE = arg('side', 'R')
-const MS = Number(arg('ms', 3000))
 // 쉼표로 여러 제스처를 주면 브라우저 세션 하나에서 순차 측정한다 (vite 기동 비용 1회).
 // 자세 스윕은 반복 실행이 많아 매번 재기동하면 대부분의 시간이 부팅에 쓰인다.
 const GESTURE = arg('gesture', null)
@@ -39,7 +38,11 @@ const SETTLE = Number(arg('settle', 1600))
 // 트리거 후 녹화 시작까지 대기(ms). 팔을 드는 **전환 구간**을 빼고 흔드는 구간만 재기 위한 것.
 // (raise 를 포함해 재면 '상완 정지도'가 항상 불합격이라 어떤 동작도 통과 불가 — 측정 구간을
 //  동작 단계에 맞추는 것이지 기준을 낮추는 것이 아니다.)
-const WAIT = Number(arg('wait', WAVE ? 420 : 120))
+// 손인사 기본값은 VRMA 판(anim/vrma/clips.ts VRMA_WAVE)의 타이밍에 맞춘 것:
+//   클립 3.0s = fadeIn 400ms + 흔들기 + fadeOut 500ms → 안정 구간 500~2400ms 를 잰다.
+//   (창을 클립보다 길게 잡으면 팔이 내려오는 복귀 구간까지 섞여 주축·정지도가 전부 깨진다)
+const WAIT = Number(arg('wait', WAVE ? 500 : 120))
+const MS = Number(arg('ms', WAVE ? 1900 : 3000))
 const CHAR = arg('char', null)
 const AS_JSON = has('json')
 
@@ -79,6 +82,10 @@ function report(r) {
   if (r.torsoClearance !== undefined) {
     console.log(
       `  몸통이격 ${r.torsoClearance.toFixed(4)}   손바닥 바깥 ${(r.palmOut ?? 0).toFixed(3)} / 정면 ${(r.palmFwd ?? 0).toFixed(3)}`,
+    )
+  if (r.hipsYaw)
+    console.log(
+      `  몸통 yaw  ${r.hipsYaw.min.toFixed(1)}° ~ ${r.hipsYaw.max.toFixed(1)}°  (마지막 ${r.hipsYaw.last.toFixed(1)}°)`,
     )
   }
   if (r.tipSpan) {

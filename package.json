@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@pixiv/three-vrm": "^3.5.3",
+    "@pixiv/three-vrm-animation": "^3.5.3",
     "@react-three/drei": "^9.119.0",
     "@react-three/fiber": "^8.17.10",
     "@react-three/postprocessing": "^2.17.0",
@@ -27,13 +28,13 @@
   "devDependencies": {
     "@gltf-transform/core": "^4.4.0",
     "@gltf-transform/functions": "^4.4.0",
-    "puppeteer": "^25.1.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/three": "^0.170.0",
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
+    "puppeteer": "^25.1.0",
     "tailwindcss": "^3.4.16",
     "typescript": "^5.6.3",
     "vite": "^6.0.5",
