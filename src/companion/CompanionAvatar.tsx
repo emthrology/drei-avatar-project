@@ -12,6 +12,7 @@ import { type MoodName } from './locales'
 import { useAvatarStore } from '../store'
 import { getCharacter } from '../editor/constants'
 import { useAssembledVrm } from '../editor/useAssembledVrm'
+import { useVrmaLayer } from './anim/vrma/useVrmaLayer'
 
 export interface CameraSettings {
   position: [number, number, number]
@@ -79,7 +80,8 @@ export function CompanionAvatar({ uploadUrl, speaking, mood, onReady, onCameraRe
   const { vrm, vrmRef, syncFace } = useAssembledVrm(baseUrl, catalog)
 
   const { speak } = useLipsync(vrmRef)
-  useAnimator(vrmRef, stateRef, moodRef, true, true) // 마지막=greetOnReady(등장 시 손인사 1회)
+  useAnimator(vrmRef, stateRef, moodRef, true, false) // 등장 인사는 아래 VRMA 레이어가 소유
+  useVrmaLayer(vrmRef, { greetOnReady: true }) // 이산 제스처(손인사) — 끝나면 idle 로 블렌드 복귀
   useLookAt(vrmRef)
 
   // 조립 base 의 dispose/회전은 useAssembledVrm 이 담당. 여기선 ready/카메라만.

@@ -98,18 +98,20 @@ export function useAnimator(
       const idx = (e as CustomEvent).detail?.index;
       if (typeof idx === 'number') manualIdlePoseRef.current = idx;
     };
+    // 손인사는 VRMA 레이어가 소유(2026-08-05) → 절차판은 `companion:wave-proc` 로만 발동한다.
+    // 지우지 않는 이유: 프로브/필름스트립에서 VRMA 판과 나란히 비교하는 기준선이라서.
     const onWave = () => {
       manualWaveRef.current = true;
     };
     window.addEventListener('companion:gesture', onGesture);
     window.addEventListener('companion:mood', onMood);
     window.addEventListener('companion:idlepose', onIdlePose);
-    window.addEventListener('companion:wave', onWave);
+    window.addEventListener('companion:wave-proc', onWave);
     return () => {
       window.removeEventListener('companion:gesture', onGesture);
       window.removeEventListener('companion:mood', onMood);
       window.removeEventListener('companion:idlepose', onIdlePose);
-      window.removeEventListener('companion:wave', onWave);
+      window.removeEventListener('companion:wave-proc', onWave);
     };
   }, []);
 

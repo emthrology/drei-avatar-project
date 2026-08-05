@@ -1,5 +1,6 @@
 import { useAvatarStore } from '../store'
 import { MOODS, IDLE_ARM_POSES } from '../companion/anim/moods'
+import { VRMA_ENABLED, VrmaPanel } from '../experiments/vrma/VrmaPanel'
 
 // 에디터 라이브 프리뷰 컨트롤 — 디버그 패널 없는 에디터에서 모션을 바로 확인/조정.
 // 컴패니언과 동일한 절차 엔진(useAnimator)을 ComposerAvatar 가 store.animPreview 로 켜고,
@@ -91,6 +92,9 @@ export function AnimationPanel() {
           </div>
         </>
       )}
+
+      {/* 🧪 VRMA 애셋 물색 — `?vrma=1` 에서만. 프리뷰 OFF(절차 간섭 없음)에서도 재생 가능 */}
+      {VRMA_ENABLED && <VrmaPanel />}
     </div>
   )
 }

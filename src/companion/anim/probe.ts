@@ -33,6 +33,13 @@ export interface ArmSample {
   /** 검지·소지 밑마디. 손바닥 평면을 정의한다(손바닥 법선 = 두 벡터의 외적) */
   indexBase?: [number, number, number];
   littleBase?: [number, number, number];
+  /**
+   * Hips 월드 yaw(도) — 몸이 정면(0°)에서 얼마나 돌아갔는가.
+   * 다른 지표는 전부 Hips 로컬이라 **몸통 자체의 방향은 구조적으로 안 보인다.**
+   * VRMA 클립이 비스듬한 자세로 저작된 경우(VRMA_03 은 −22°) 재생 후 그 각도가 남는지
+   * 확인하려면 이 값이 필요하다 — 절차 레이어는 Hips 를 쓰지 않으므로 아무도 되돌리지 않는다.
+   */
+  hipsYaw?: number;
 }
 
 // 프레임당 재사용 (샘플링이 useFrame 에서 도므로 할당 금지)
@@ -68,6 +75,10 @@ export function sampleArm(vrm: VRM, side: Side, t: number): ArmSample | null {
   const indexBone = h.getNormalizedBoneNode(side === 'L' ? B.LeftIndexProximal : B.RightIndexProximal);
   const littleBone = h.getNormalizedBoneNode(side === 'L' ? B.LeftLittleProximal : B.RightLittleProximal);
 
+  // Hips 월드 yaw — Y축 twist 성분만 뽑아 각도로
+  ref.getWorldQuaternion(_q);
+  const hipsYaw = 2 * Math.atan2(_q.y, _q.w) * (180 / Math.PI);
+
   shoulder.getWorldQuaternion(_q);
   return {
     t,
@@ -75,6 +86,7 @@ export function sampleArm(vrm: VRM, side: Side, t: number): ArmSample | null {
     elbow: localPos(elbow, ref),
     hand: localPos(hand, ref),
     armQuat: [_q.x, _q.y, _q.z, _q.w],
+    hipsYaw: ((hipsYaw + 180) % 360) - 180,
     ...(tipBone ? { tip: localPos(tipBone, ref) } : {}),
     ...(indexBone ? { indexBase: localPos(indexBone, ref) } : {}),
     ...(littleBone ? { littleBase: localPos(littleBone, ref) } : {}),
@@ -119,6 +131,12 @@ export interface ArmMetrics {
    * 카메라에선 손등도 손바닥도 안 보인다(실측 palmOut 0.99일 때 화면상 edge-on).
    */
   palmFwd: number;
+  /**
+   * Hips 월드 yaw 의 [최소, 최대, 마지막] (도). 몸이 정면에서 얼마나 돌아갔는지.
+   * VRMA 클립이 비스듬한 자세로 저작되면 재생 중 몸이 돌아가는데, **절차 레이어는 Hips 를
+   * 안 쓰므로 아무도 되돌리지 않는다** → 제스처 후에도 남았는지 `last` 로 확인한다.
+   */
+  hipsYaw: { min: number; max: number; last: number };
 }
 
 export interface Check {
@@ -201,6 +219,7 @@ export function measureArm(samples: ArmSample[]): ArmMetrics {
       torsoClearance: 0,
       palmOut: 0,
       palmFwd: 0,
+      hipsYaw: { min: 0, max: 0, last: 0 },
     };
   }
 
@@ -241,6 +260,11 @@ export function measureArm(samples: ArmSample[]): ArmMetrics {
     ),
     palmOut: mean(samples.map((s) => palmNormal(s)[0])),
     palmFwd: mean(samples.map((s) => palmNormal(s)[1])),
+    hipsYaw: {
+      min: Math.min(...samples.map((s) => s.hipsYaw ?? 0)),
+      max: Math.max(...samples.map((s) => s.hipsYaw ?? 0)),
+      last: samples[samples.length - 1].hipsYaw ?? 0,
+    },
   };
 }
 
