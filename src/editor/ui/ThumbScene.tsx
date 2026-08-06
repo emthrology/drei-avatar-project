@@ -71,8 +71,14 @@ function FitCamera({
       PADDING[category];
     cam.position.set(center.x, center.y, center.z + dist); // VRM1.0/VRoid 정면 = +Z
     cam.lookAt(center);
+    // react-hooks/immutability 는 훅이 돌려준 값을 변형하지 말라고 하지만, R3F 에서는
+    // useThree() 가 준 three.js 객체를 **직접 변형하는 것이 정상 사용법**이다(카메라·씬은
+    // React 상태가 아니라 렌더러가 소유하는 가변 객체). 규칙을 전역으로 끄면 진짜 위반까지
+    // 가려지므로 이 지점만 끈다. position/lookAt 은 메서드라 규칙에 안 걸릴 뿐 성격은 같다.
+    /* eslint-disable react-hooks/immutability */
     cam.near = Math.max(dist / 100, 0.01);
     cam.far = dist * 10;
+    /* eslint-enable react-hooks/immutability */
     cam.updateProjectionMatrix();
     // 한 프레임 더 그린 뒤 ready (행렬·머티리얼 반영 안정화)
     requestAnimationFrame(() =>
