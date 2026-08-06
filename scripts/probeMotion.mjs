@@ -98,7 +98,13 @@ function report(r) {
 }
 
 async function main() {
-  const server = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], { stdio: 'pipe' })
+  // PROBE_OWNED: 이 서버는 일회용이라 dev 서버 신원 파일(vite.config.ts)을 남기면 안 된다.
+  // 사용자 dev 서버가 IPv6 로 같은 포트에 떠 있으면 이 서버가 IPv4 로 나란히 붙어, 기록을
+  // 덮어쓴 뒤 종료하며 지워버린다 → probeAttach 가 살아있는 dev 서버를 못 찾는다.
+  const server = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], {
+    stdio: 'pipe',
+    env: { ...process.env, PROBE_OWNED: '1' },
+  })
   let browser
   try {
     await waitForServer(server)
