@@ -70,9 +70,13 @@ const touchLastUse = () => {
  * 파일에 기록을 남기는 방식은 낡은 기록이 두 방식으로 깨져 폐기했다(그 파일의 주석 참조).
  */
 async function findDevServer() {
+  // 탐색 범위 = **사람의 dev 대역만**(5173~5189). vite 는 점유 시 5173 부터 위로 올라간다.
+  // 스크립트 일회용 서버(probeMotion 5190·waveShots 5191·vrmaShots 5192·renderThumbs 5193)는
+  // 같은 저장소를 서빙해 신원 검사를 그냥 통과하므로, 대역이 겹치면 `npm run probe` 가 도는
+  // 중에 그 서버에 붙어 **사람의 서버 대신** 측정하게 된다. 대역을 안 겹치게 갈라 원천 차단.
   const ports = PORT_OVERRIDE
     ? [Number(PORT_OVERRIDE)]
-    : Array.from({ length: 10 }, (_, i) => 5173 + i);
+    : Array.from({ length: 17 }, (_, i) => 5173 + i);
   const tried = [];
   for (const port of ports) {
     let id;

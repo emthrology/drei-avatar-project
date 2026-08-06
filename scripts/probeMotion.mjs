@@ -17,7 +17,10 @@
 import { spawn } from 'child_process';
 import puppeteer from 'puppeteer';
 
-const PORT = 5180;
+// 포트 정책: 5173~5189 는 **사람의 `npm run dev` 몫**(vite 는 점유 시 5173 부터 위로 올라간다).
+// 스크립트가 띄우는 일회용 서버는 5190 대를 쓴다 — 겹치면 probeAttach 가 dev 서버를 찾을 때
+// 같은 저장소를 서빙하는 이 서버에 붙어(신원 검사를 통과한다) 사람의 서버 대신 측정하게 된다.
+const PORT = 5190;
 
 function arg(name, fallback) {
   const i = process.argv.indexOf(`--${name}`);

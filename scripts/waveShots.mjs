@@ -8,7 +8,7 @@ import { spawn } from 'child_process';
 import { mkdirSync } from 'fs';
 import puppeteer from 'puppeteer';
 
-const PORT = 5181;
+const PORT = 5191; // 5190 대 = 스크립트 일회용 서버 (5173~5189 는 사람의 dev 몫)
 const REPO = '/Users/Dongmin/new_workspace/drei-avatar-project';
 
 function arg(name, fallback) {

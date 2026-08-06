@@ -14,7 +14,7 @@ import fs from 'fs';
 import path from 'path';
 import puppeteer from 'puppeteer';
 
-const PORT = 5179;
+const PORT = 5193; // 5190 대 = 스크립트 일회용 서버 (5173~5189 는 사람의 dev 몫)
 const SIZE = 360; // 정사각 뷰포트 → 정사각 PNG
 const OUT = 'public/avatars/thumbs';
 
