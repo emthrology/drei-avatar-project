@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useGLTF } from '@react-three/drei';
 import { VRMLoaderPlugin, VRM, VRMUtils } from '@pixiv/three-vrm';
 import * as THREE from 'three';
@@ -51,10 +51,17 @@ export function useAssembledVrm(
   // 외형값(셰이더·메시 색) — 에디터에서 조정하면 컴패니언도 같은 store 로 적용(공유).
   const shader = useAvatarStore((s) => s.shader);
   const meshInfos = useAvatarStore((s) => s.meshInfos);
+  // 최신값 통로 — 파츠 로딩 이펙트(비동기)가 재실행 없이 현재 값을 읽으려고 쓴다.
+  // 쓰기는 렌더가 아니라 **커밋 시점**에. 이 훅은 useGLTF 가 서스펜드하므로 **버려지는 렌더가
+  // 실제로 발생**하고, 그 렌더가 ref 를 건드리면 커밋 안 된 값이 남는다(오늘은 값이 멱등이라
+  // 무해하지만 원리적으로 잘못). useLayoutEffect 는 모든 useEffect 보다 먼저 실행되므로
+  // 아래 로딩 이펙트가 낡은 값을 읽는 일은 없다 — 선언 순서에도 의존하지 않는다.
   const eyeColorRef = useRef(eyeColor);
-  eyeColorRef.current = eyeColor;
   const onAssembledRef = useRef(onAssembled);
-  onAssembledRef.current = onAssembled;
+  useLayoutEffect(() => {
+    eyeColorRef.current = eyeColor;
+    onAssembledRef.current = onAssembled;
+  });
   // 조립 변경(파츠 add/remove) 카운터 → 새 파츠 머티리얼에도 외형값 재적용 트리거
   const [assemblyVersion, setAssemblyVersion] = useState(0);
 
