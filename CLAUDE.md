@@ -6,6 +6,7 @@ VRoid VRM 아바타를 불러와 MToon 셰이더로 파츠/색상을 실시간 �
 ## 프로젝트 배경
 
 이전 프로젝트(game-avatar-companion)에서 TalkingHead.js + vanilla Three.js 방식의 한계로 새로 시작:
+
 - 외부 라이브러리가 씬을 소유해서 셰이더 끼워넣기 어려움
 - VRM을 GLB로 변환하면서 MToon 데이터가 손실됨 → MeshToonMaterial 수동 교체로는 퀄리티 한계
 - `onBeforeCompile` 등 커스텀 셰이더 적용이 구조적으로 힘들었음
@@ -14,15 +15,15 @@ VRoid VRM 아바타를 불러와 MToon 셰이더로 파츠/색상을 실시간 �
 
 ## 기술 스택
 
-| 역할 | 도구 |
-|------|------|
-| VRM 로딩/셰이더 | `@pixiv/three-vrm` v3.5.3 |
-| 3D 렌더링 | `@react-three/fiber` v8 |
-| 헬퍼/유틸 | `@react-three/drei` v9 |
-| 상태 관리 | Zustand v5 |
-| UI | React + Vite + Tailwind |
-| 테스트 | Vitest (`npm test` / `test:watch`) — 순수 로직 단위 테스트 |
-| 아바타 포맷 | VRM (VRoid Studio 직접 내보내기) |
+| 역할            | 도구                                                       |
+| --------------- | ---------------------------------------------------------- |
+| VRM 로딩/셰이더 | `@pixiv/three-vrm` v3.5.3                                  |
+| 3D 렌더링       | `@react-three/fiber` v8                                    |
+| 헬퍼/유틸       | `@react-three/drei` v9                                     |
+| 상태 관리       | Zustand v5                                                 |
+| UI              | React + Vite + Tailwind                                    |
+| 테스트          | Vitest (`npm test` / `test:watch`) — 순수 로직 단위 테스트 |
+| 아바타 포맷     | VRM (VRoid Studio 직접 내보내기)                           |
 
 **Vite 필수** — R3F 생태계 표준, CRA 사용 금지.
 **Three.js v0.170.x** — @pixiv/three-vrm 3.x 호환 버전.
@@ -85,7 +86,8 @@ drei-avatar-project/
 │   ├── extractParts.mjs      #   VRoid 소스 VRM → 파츠 GLB/VRM (raw glTF 수술 + prune)
 │   ├── renderThumbs.mjs      #   puppeteer 로 ?thumb= 단독 렌더 → 썸네일 PNG (커밋)
 │   ├── makeWaveVrma.mjs      #   VRMA_03 개조 → wave.vrma (손가락 이식 + 월드축 흔들기 주입)
-│   ├── probeMotion.mjs       #   손동작 수치 판정 (npm run probe)
+│   ├── probeMotion.mjs       #   손동작 수치 판정 (npm run probe) — 자기 vite/브라우저를 띄움
+│   ├── probeAttach.mjs       #   같은 판정을 살아있는 dev 서버·브라우저에 붙어 실행 (npm run probe:tab, 4~6초)
 │   └── vrmaShots.mjs         #   VRMA/절차 필름스트립 비교 캡처
 ├── .env                      # VITE_GOOGLE_TTS_API_KEY (선택)
 └── package.json
@@ -93,10 +95,10 @@ drei-avatar-project/
 
 ## 아바타 소스
 
-| 소스 | 무료 | 비고 |
-|------|------|------|
-| VRoid Studio | ✅ | VRM 직접 로딩 가능 (변환 불필요) |
-| Avaturn | ❌ 유료 | RPM 대안 |
+| 소스         | 무료    | 비고                             |
+| ------------ | ------- | -------------------------------- |
+| VRoid Studio | ✅      | VRM 직접 로딩 가능 (변환 불필요) |
+| Avaturn      | ❌ 유료 | RPM 대안                         |
 
 **⚠️ Ready Player Me 사용 불가** — 2026년 1월 Netflix 인수 후 서비스 종료.
 **GLB 사용 시 주의** — @pixiv/three-vrm는 .vrm 파일 로딩 전용. GLB는 VRM 메타데이터 없음.
@@ -123,15 +125,17 @@ drei-avatar-project/
 ```tsx
 // useGLTF extendLoader 콜백으로 VRMLoaderPlugin 등록
 const gltf = useGLTF(url, true, true, (loader: any) => {
-  loader.register((parser: any) => new VRMLoaderPlugin(parser as any))
-})
-const vrm: VRM | undefined = (gltf as any).userData?.vrm
+  loader.register((parser: any) => new VRMLoaderPlugin(parser as any));
+});
+const vrm: VRM | undefined = (gltf as any).userData?.vrm;
 
 // VRM 0.x 미러 보정
-VRMUtils.rotateVRM0(vrm)
+VRMUtils.rotateVRM0(vrm);
 
 // 매 프레임 time-based uniform 업데이트 (rim light 등)
-useFrame((_, delta) => { vrm.update(delta) })
+useFrame((_, delta) => {
+  vrm.update(delta);
+});
 ```
 
 **중요:** MToonMaterial은 R3F Environment/HDR을 무시함.
@@ -146,6 +150,7 @@ ShaderPanel은 슬라이더로 `store.shader`만 갱신. **실제 씬 머티리�
 가시성(show/hide)만 에디터 전용(컴패니언 가시성은 파츠 로더가 소유).
 
 조작 가능한 파라미터 (전역, `store.shader`):
+
 - `outlineWidthFactor` — 외곽선 두께 (0~0.02)
 - `shadingToonyFactor` — 툰 경계 선명도 (0~1, 높을수록 명확한 경계)
 
@@ -157,14 +162,19 @@ ShaderPanel은 슬라이더로 `store.shader`만 갱신. **실제 씬 머티리�
 게임 이벤트에 반응하는 VTuber 스타일 오버레이.
 
 ### 게임 이벤트 연동
+
 ```typescript
-window.dispatchEvent(new CustomEvent('game:event', {
-  detail: { type: 'level_clear' }  // player_die | level_clear | near_miss | jump | start
-}))
+window.dispatchEvent(
+  new CustomEvent('game:event', {
+    detail: { type: 'level_clear' }, // player_die | level_clear | near_miss | jump | start
+  }),
+);
 ```
 
 ### 아이들 애니메이션 (anim/ 스케줄러 — 옛 useIdleAnimation 대체됨)
+
 선언적 루프 템플릿([moods.ts](src/companion/anim/moods.ts) BASE_LOOPS):
+
 - 호흡(`chest.inhale`) / 머리 미동(`head.rotate*`, 가끔 둘러보기) / 눈깜빡임
 - 포즈(`spine.*` 체중이동 + 둘러보기 alt) — Head/팔 FK 상속
 - **armPose 팔**: 차렷+미세이동 / 허리짚기 / 뒷짐. 발화 시 rest로 양보(제스처가 팔 소유). 상세 [docs/idle-arm-plan.md](docs/idle-arm-plan.md)
@@ -172,15 +182,19 @@ window.dispatchEvent(new CustomEvent('game:event', {
 옛 useIdleAnimation(slerp 기반)은 폐기 — 위 선언적 스케줄러로 흡수.
 
 ### 립싱크 (useLipsync.ts)
+
 - word timing → VRM `expressionManager` viseme 매핑
 - 영어 단어 첫 모음: a→Aa, e→Ee, i→Ih, o→Oh, u→Ou
 - TTS 없을 때: 말풍선만 5초 표시
 
 ### TTS 설정
+
 `.env` 파일:
+
 ```
 VITE_GOOGLE_TTS_API_KEY=your_key_here
 ```
+
 없으면 말풍선만 표시 (오디오 없음). 현재 등급은 WaveNet — 실수요 서비스 이식 시 백엔드 선정(트래픽 구간별 비용·한국어 품질·립싱크 타이밍 제공 여부)은 [docs/tts-model-selection.md](docs/tts-model-selection.md).
 
 ## 컴패니언 DebugPanel
@@ -190,10 +204,10 @@ VITE_GOOGLE_TTS_API_KEY=your_key_here
 ```tsx
 // App.tsx companion 모드에서 렌더링
 <DebugPanel
-  status={companionStatus}      // 'loading' | 'ready' | 'speaking'
+  status={companionStatus} // 'loading' | 'ready' | 'speaking'
   lastText={lastText}
   lang={lang}
-  onEvent={dispatchGameEvent}   // game:event CustomEvent dispatch
+  onEvent={dispatchGameEvent} // game:event CustomEvent dispatch
   onLangChange={setLang}
   onAvatarLoad={handleAvatarLoad} // .vrm 파일 → URL.createObjectURL → CompanionOverlay key 변경
 />
@@ -266,27 +280,27 @@ TalkingHead 1.3 소스(3,994줄) 분석 결과, 핵심 기능 전부 VRM으로 �
 
 ### 진행 순서 (의존성 기준, 알파벳순 아님)
 
-| 순서 | 단계 | 내용 | 의존성 | 권장 모델 |
-|------|------|------|--------|----------|
-| 1 | ✅ A. 시선 | `vrm.lookAt.lookAt()` 직접 호출 + rangeMap 보정(수평 inputMax 50) + center/glance 2상태 사케이드 | 독립 | Sonnet |
-| 2 | ✅ D. 립싱크 업그레이드 | `lipsyncEn.ts` 글자 기반 음소 분해 + `visemeApplier.ts` 이중 경로 (모음→expressionManager / 자음→Fcl_MTH_Close 등 직접 조작). `registerExpression()` 불필요 — 모프 비중복으로 충돌 없음 | 독립 | Fable |
-| 3 | ✅ B. 애니메이션 스케줄러 | `anim/` 서브시스템 — animFactory(템플릿→클립) + clock 기반 보간 + gaussian + idle/speaking 분기. **hold-last**(클립 미기록 채널 직전값 유지)로 끊김 제거. 클립별 `ease`(sigmoid 강도) | 기반 코드 | Opus |
-| 4 | ✅ C. 포즈 전환 | 6종 상반신 체중이동(Spine 회전 → Head/팔/Chest FK 상속 → 전신 흔들림). 진폭↑, 3~10초 전환으로 적극적 idle. 머리도 70% 미동/30% 둘러보기 alt | B 필요 | Opus |
-| 5 | ✅ E. 제스처 | FK(IK 미사용) 발화 제스처 **10종 세트** — 팔 주도/머리 주도(끄덕·갸웃)/다가서기·물러서기/몸통 기울임/손가슴. 발화 시작 시 랜덤 1개(확률 0.6) + **DebugPanel 수동 트리거**(`companion:gesture` 이벤트). out-hold-back + ease 2.5. 전역 편안한 손(손가락 curl 1회) | B 필요 | Opus |
+| 순서 | 단계                      | 내용                                                                                                                                                                                                                                                             | 의존성    | 권장 모델 |
+| ---- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | --------- |
+| 1    | ✅ A. 시선                | `vrm.lookAt.lookAt()` 직접 호출 + rangeMap 보정(수평 inputMax 50) + center/glance 2상태 사케이드                                                                                                                                                                 | 독립      | Sonnet    |
+| 2    | ✅ D. 립싱크 업그레이드   | `lipsyncEn.ts` 글자 기반 음소 분해 + `visemeApplier.ts` 이중 경로 (모음→expressionManager / 자음→Fcl_MTH_Close 등 직접 조작). `registerExpression()` 불필요 — 모프 비중복으로 충돌 없음                                                                          | 독립      | Fable     |
+| 3    | ✅ B. 애니메이션 스케줄러 | `anim/` 서브시스템 — animFactory(템플릿→클립) + clock 기반 보간 + gaussian + idle/speaking 분기. **hold-last**(클립 미기록 채널 직전값 유지)로 끊김 제거. 클립별 `ease`(sigmoid 강도)                                                                            | 기반 코드 | Opus      |
+| 4    | ✅ C. 포즈 전환           | 6종 상반신 체중이동(Spine 회전 → Head/팔/Chest FK 상속 → 전신 흔들림). 진폭↑, 3~10초 전환으로 적극적 idle. 머리도 70% 미동/30% 둘러보기 alt                                                                                                                      | B 필요    | Opus      |
+| 5    | ✅ E. 제스처              | FK(IK 미사용) 발화 제스처 **10종 세트** — 팔 주도/머리 주도(끄덕·갸웃)/다가서기·물러서기/몸통 기울임/손가슴. 발화 시작 시 랜덤 1개(확률 0.6) + **DebugPanel 수동 트리거**(`companion:gesture` 이벤트). out-hold-back + ease 2.5. 전역 편안한 손(손가락 curl 1회) | B 필요    | Opus      |
 
 ### D 단계: 합성 viseme 레시피
 
 VRM preset은 입 모양 5개(aa/ih/ou/ee/oh)지만, VRoid 모델의 추가 입 모프를 조합해 런타임 확장:
 
-| Oculus viseme | 합성 레시피 (VRoid 모프) |
-|---|---|
-| PP (b/p/m) | `Fcl_MTH_Close` 1.0 |
-| FF (f/v) | `Fcl_MTH_Close` 0.5 + `Fcl_MTH_Small` 0.4 |
-| SS (s/z) | `Fcl_MTH_I` 0.4 + `Fcl_MTH_Small` 0.3 |
-| DD/nn/kk | `Fcl_MTH_I` 또는 `Fcl_MTH_E` 저강도 |
-| CH | `Fcl_MTH_U` 0.5 + `Fcl_MTH_I` 0.3 |
-| sil | 전부 0 |
-| aa/E/ih/oh/ou | preset 그대로 |
+| Oculus viseme | 합성 레시피 (VRoid 모프)                  |
+| ------------- | ----------------------------------------- |
+| PP (b/p/m)    | `Fcl_MTH_Close` 1.0                       |
+| FF (f/v)      | `Fcl_MTH_Close` 0.5 + `Fcl_MTH_Small` 0.4 |
+| SS (s/z)      | `Fcl_MTH_I` 0.4 + `Fcl_MTH_Small` 0.3     |
+| DD/nn/kk      | `Fcl_MTH_I` 또는 `Fcl_MTH_E` 저강도       |
+| CH            | `Fcl_MTH_U` 0.5 + `Fcl_MTH_I` 0.3         |
+| sil           | 전부 0                                    |
+| aa/E/ih/oh/ou | preset 그대로                             |
 
 - 구현: `expressionManager.registerExpression()` — 모델 파일 수정 불필요
 - **이식성 필수**: `Fcl_MTH_*`는 VRoid 명명 규칙. 비VRoid 모델 대비 모프 이름 감지 → 없으면 preset 5개 fallback
@@ -308,13 +322,13 @@ VRM preset은 입 모양 5개(aa/ih/ou/ee/oh)지만, VRoid 모델의 추가 입 
 - Zustand에 Three.js 객체(VRM, Object3D) 절대 넣지 말 것 → module singleton 사용
 - `vrm.update(delta)` 매 프레임 필수 — 없으면 springBone 물리(머리카락/옷)·lookAt·표정 정지
 - KTX2Loader 타입 충돌 (drei three-stdlib vs @types/three) → `loader`, `parser` `any` 캐스트
-- VRM 파츠는 Face_(merged), Body_(merged) 등 통합 메시 → **임의 업로드 VRM은 진정한 파츠 교체 불가**(merged). 에디터 조립은 이걸 풀려고 authored 베이스+파츠 라이브러리로 전환: 외주가 베이스 위에 스키닝한 모듈 파츠(GLB/VRM)를 런타임 rebind/graft로 조립(`src/editor/partLoader.ts`). 컨벤션 락은 authored 경로에만 적용
+- VRM 파츠는 Face*(merged), Body*(merged) 등 통합 메시 → **임의 업로드 VRM은 진정한 파츠 교체 불가**(merged). 에디터 조립은 이걸 풀려고 authored 베이스+파츠 라이브러리로 전환: 외주가 베이스 위에 스키닝한 모듈 파츠(GLB/VRM)를 런타임 rebind/graft로 조립(`src/editor/partLoader.ts`). 컨벤션 락은 authored 경로에만 적용
 
 ### 에셋 조립 엔진(src/editor/) 불변식 — 신규 파츠/로더 수정 시 준수
 
 - **base 불가지 로더**: `load*(url, baseVrm)` 시그니처 유지 — 새 기능도 baseVrm/스펙을 파라미터로 받게. 캐릭터(base) 추가는 `constants.ts` `CHARACTERS[]`에 1줄(베이스별 `{baseUrl, catalog}`)
 - **컨벤션 락(`BASE_SPEC`)**: VRM1.0·54본·`J_Bip_*`·A-pose·신장 1.756m·MToon. 파츠가 어기면 rebind 깨짐. 외주 사양은 composer `ASSET_SPEC.md`
-- **rebind/graft**: 외부 SkinnedMesh skinIndex는 자기 skeleton.bones 인덱스 → 같은 순서로 base 본 치환 + boneInverses 재사용. base에 없는 보조 본(소매 J_Sec_*, 눈 본)은 부모 아래로 graft 후 rebind 매칭. 스프링 헤어는 base springBoneManager에 addJoint 병합 → `vrm.update(delta)` 한 번에 같이 돔(이중 호출 금지)
+- **rebind/graft**: 외부 SkinnedMesh skinIndex는 자기 skeleton.bones 인덱스 → 같은 순서로 base 본 치환 + boneInverses 재사용. base에 없는 보조 본(소매 J*Sec*\*, 눈 본)은 부모 아래로 graft 후 rebind 매칭. 스프링 헤어는 base springBoneManager에 addJoint 병합 → `vrm.update(delta)` 한 번에 같이 돔(이중 호출 금지)
 - **MToon 통일**: 옷 GLB는 prune으로 PBR 로드 → 런타임 `toMToon` 변환(shade≈base×0.87, toony 0.95)으로 base 툰과 톤 일치. 아웃라인은 의도적 미부착(촘촘한 의류서 뭉침)
 - **seam(meshInfos)**: 파츠 add/remove 후 `setMeshInfos(collectMeshInfos(base))` 재수집 — 색 패널·ShaderPanel(`[vals, meshInfos]` 의존)이 새 파츠 인지. ComposerAvatar가 슬롯 load 성공 직후 호출. 리스트 표시명은 머티리얼명 규칙([meshLabels.ts](src/editor/meshLabels.ts))으로 부위 라벨화(미매칭 fallback=원본명). **파츠 로더가 숨긴 base 메시**(얼굴 교체 시 base 얼굴)는 `userData[SHADOWED_BY_PART]` 표식으로 `collectMeshInfos`가 제외 → swap 얼굴과 중복 행·가시성 이중 소유 토글 충돌 차단(로더가 가시성 소유, dispose 시 복원+표식 해제)
 - **slot diff + genRef**: 카테고리 슬롯당 1개 active. 빠른 연속 선택은 genRef 토큰으로 늦게 끝난 로드 폐기(레이스 가드). 캐릭터 전환은 `<ComposerAvatar key={characterId}>` remount + dispose의 `useGLTF.clear(baseUrl)`
@@ -338,6 +352,11 @@ VRM preset은 입 모양 5개(aa/ih/ou/ee/oh)지만, VRoid 모델의 추가 입 
   - 지표 9종: 흔들림 주축·이동폭(둘 다 **손끝** 기준 — 손목 회전은 손목 관절을 못 움직여 손목에서 재면 항상 0) · 상완 정지도 · 하완 전방 · 손 높이 · 상완 이격 · **몸통이격**(하완이 몸통에 파묻힘) · **손바닥 바깥/정면**(palmOut/palmFwd — 인사는 정면이 목표, 측면만 키우면 손이 날로 서서 안 보임)
   - 플래그: `--wave`(손인사) · `--gesture 1,2,3`(한 세션에서 일괄 — vite 기동 1회) · `--char female1`(**캐릭터마다 값이 다르다, 양쪽 검증 필수**) · `--wait`(팔 드는 전환 구간 제외; 포함하면 어떤 동작도 '상완 덜렁거림'으로 불합격)
   - **프로브가 못 재는 것 = 자세가 인사처럼 보이는가.** 지표 6개를 다 통과하고도 참고 이미지와 전혀 다른 자세('만세')였던 적이 있다 → 눈=방향 교정 / 프로브=회귀 감시로 역할을 나눈다. 필름스트립 [scripts/waveShots.mjs](scripts/waveShots.mjs)(`--char`·`--gesture` 지원, DebugPanel 자동 숨김)
+  - **튜닝 루프 = 탐색은 `npm run probe:tab`(4~6초) / 확정은 `npm run verify`**(vitest + 양 캐릭터 wave 프로브). 실측상 `npm run probe` 30초 중 **27초가 콜드스타트**(vite 기동·puppeteer·12MB VRM 로드)고 측정 구간은 3초뿐 — [scripts/probeAttach.mjs](scripts/probeAttach.mjs)는 전용 헤드리스 크롬 하나를 띄워두고 로드된 탭을 재사용해 그 27초를 1회 비용으로 접는다(`npm run dev` 선행 필요). 측정·판정 로직은 페이지 안(`useMotionProbe`)이라 **동일**하고, 판정도 exit code 로 나간다(`probeMotion.mjs:173`과 같은 규약)
+    - **브라우저 손으로 띄우지 말 것** — 스크립트가 기동·재사용·15분 유휴 자동종료까지 관리한다. 수동으로 남기면 크롬 9프로세스(≈1.1GB)가 다음 세션의 유령이 된다(실제로 다른 프로젝트가 남긴 9222 headless `--disable-gpu` 크롬에 붙어 WebGL 없이 63초를 날린 적 있음 → 그래서 포트가 아니라 **user-data-dir 로 신원을 확인**하고 남의 것이면 붙지 않는다)
+    - **dev 서버도 신원으로 찾는다** — 5173은 vite 전역 기본값이라 번호만 믿으면 남의 프로젝트 서버를 조용히 잰다. [vite.config.ts](vite.config.ts) `probe-dev-server-stamp` 가 `node_modules/.cache/dev-server.json`에 `{port, root, pid}`를 남기고 프로브가 셋을 확인한다(포트가 5174로 밀려도 따라감). ⚠️ 일회용 서버(`probeMotion.mjs`)는 `PROBE_OWNED=1`로 **stamp를 안 남긴다** — 사용자 dev 서버가 IPv6(`[::1]:5173`)면 일회용 서버가 IPv4로 나란히 붙어 기록을 덮어쓴 뒤 종료하며 지워버린다(실측)
+    - **낡은 코드를 잴 수 없다** — `--no-reload`를 줘도 `src`/`public/animations`/`public/avatars`의 mtime이 페이지 `performance.timeOrigin`보다 새로우면 강제 리로드. HMR 반영 여부는 밖에서 확인 불가 + R3F 씬은 HMR 후 상태가 어긋나므로 **낡았을 가능성이 있으면 리로드**(오판을 안전한 방향으로). 또 dev 서버를 재기동하면 모듈 해시가 바뀌므로 `setCacheEnabled(false)` 필수 — 안 하면 부팅이 멈추고 증상은 "ready 도달 실패"로만 보인다
+    - ⚠️ **완료 선언은 여전히 `npm run verify`** — `ProbeResult`에 조건(로드 후 경과·트리거 후 경과)이 없어 **프로토콜을 건너뛴 수치와 지킨 수치가 화면상 구별되지 않는다**. `probe:tab`은 프로토콜을 코드로 강제하지만, 브라우저에서 손으로 이벤트를 쏜 수치는 방향 판단 전용
   - ⚠️ **임계값은 자동 조정되지 않는다** — `WAVE_TARGETS`는 박힌 상수라 사람이 손으로만 바뀐다. **PASS를 얻으려고 임계를 낮추는 것 금지**(측정기를 끄는 것과 같다). "물리적으로 도달 불가능한 기준이었다"는 실측 근거가 있을 때만 조정하고, **조정 사실과 근거를 반드시 보고**한다. 요구받아도 두 경우를 구분해 제시한 뒤 판단을 받을 것 — 상세 [docs/wave-gesture-attempts.md](docs/wave-gesture-attempts.md) 「임계값 조정 규율」
 - **VRMA 레이어 = 이산 제스처, idle 은 절차가 계속 소유** ([anim/vrma/](src/companion/anim/vrma/)): `AnimationMixer`가 humanoid 본을 통째로 덮어쓰므로 그냥 멈추면 마지막 자세에서 **튄다**. three.js `fadeOut`도 답이 아님 — 블렌드 상대가 액션 시작 시점의 **얼어붙은** 스냅샷이라 그 사이 움직인 절차 레이어와 어긋난다. → 매 프레임 **①절차 결과 스냅샷 → ②mixer 덮어쓰기 → ③가중치 w로 스냅샷 쪽 slerp**(w: 0→1→1→0, smootherstep). 상대가 **살아있는 절차 출력**이라 호흡 위상까지 맞춰 복귀. w=0이면 기존 동작과 동일(비퇴행)
   - **소유권 이전 = 초기화 지점** — `action.stop()` 이 부르는 three.js `restoreOriginalState` 가 바인딩된 본 **전부**를 액션 시작 시점 값으로 되돌린다. ①절차가 **안 쓰는** 본(Hips·목·어깨·다리·손가락)은 복귀 목표를 제스처 직전 자세(rest0)로 둬서 restore 를 무효화(직전 출력으로 두면 목표가 자기 자신이라 VRMA 자세에 머물다 22° 점프) ②절차가 **쓰는** 본은 `stop()` **직후 최종 자세를 다시 써 넣어** 무효화 — 안 하면 그 한 프레임만 rest0 로 튀어 **손이 19cm 왕복하는 1프레임 블링크**가 화면에 나간다(R3F는 useFrame 다 돌고 렌더). 소유 판별은 "직전에 우리가 써 넣은 값 그대로인가"로 런타임에(채널 목록 복사 금지 — 한쪽만 바뀌면 조용히 어긋남)
@@ -352,6 +371,6 @@ VRM preset은 입 모양 5개(aa/ih/ou/ee/oh)지만, VRoid 모델의 추가 입 
   - **micro-drift**: [channels.ts](src/companion/anim/channels.ts) `DRIFT` 맵(채널별 [주파수, 위상, 진폭≈0.005~0.008rad])의 초저주파 sine을 `apply(state, t)`에서 최종 euler에 상시 가산 → hold 구간(제스처 정지·포즈 유지)도 살아있음. 활성 모션 땐 진폭에 묻혀 **hold 감지 불필요**. ⚠️ `tick` 반환 state는 `scheduler.live` **동일 참조 → mutate 금지**(drift는 euler 로컬에만 가산, hold-last 비오염). 제외=머리(이미 미동)·얼굴(표정 동기)·`chest.inhale`(이미 진동). 주기는 서로 안 맞아떨어지게(≈5~12s) 배치해 반복감 제거. `DRIFT_AMP=0`이면 완전 무영향
 - **lookAt rangeMap**: VRoid 기본 inputMax 90은 정면 시선이 거의 0 → `useLookAt`에서 수평만 보정. 수직 보정 시 눈 내리깖(카메라가 가슴 높이라 하향각 포화)
 - **제스처 추가**: `anim/moods.ts` GESTURES 배열에 `{label, ease, dt:[out,hold,back], vs:[out,hold,rest]}` 항목 추가 → DebugPanel 버튼 자동 생성. 손은 상반신 프레임 하단이라 큰 손짓보다 절제된 동작이 적합
-- **held 표정 vs 일회성 표정**: 한 채널은 둘 중 하나만 소유. held(무드 유지)는 `MOODS[m].expression` → `moodExprClip`(EMOTION_CHANNELS 중 `ONESHOT_EMOTION_CHANNELS` 제외분). 일회성(진입 1회 후 0 복귀)은 `useAnimator`의 전용 클립 + 해당 채널을 held에서 제외. 현재 일회성: surprised 입벌림(`emo.mthSurprised`/SURPRISE_GASP), happy 눈웃음(`emo.eyeJoy`/HAPPY_EYE). 발화 내내 같은 부위가 고정되면 안 되는 표정은 이 패턴으로(눈감김·입벌림). happy처럼 부위 결합 preset이 문제면 부위 모프(`Fcl_MTH_*`/`Fcl_EYE_*`/`Fcl_BRW_*`)로 분해
+- **held 표정 vs 일회성 표정**: 한 채널은 둘 중 하나만 소유. held(무드 유지)는 `MOODS[m].expression` → `moodExprClip`(EMOTION*CHANNELS 중 `ONESHOT_EMOTION_CHANNELS` 제외분). 일회성(진입 1회 후 0 복귀)은 `useAnimator`의 전용 클립 + 해당 채널을 held에서 제외. 현재 일회성: surprised 입벌림(`emo.mthSurprised`/SURPRISE_GASP), happy 눈웃음(`emo.eyeJoy`/HAPPY_EYE). 발화 내내 같은 부위가 고정되면 안 되는 표정은 이 패턴으로(눈감김·입벌림). happy처럼 부위 결합 preset이 문제면 부위 모프(`Fcl_MTH*_`/`Fcl*EYE*_`/`Fcl*BRW*\*`)로 분해
 - **idle 팔 포즈 (armPose 루프)**: arm/elbow 채널 단독 소유. idle=포즈 alt, **speaking=rest로 양보** → 발화 제스처가 큐 후순위로 per-channel 승(루프는 생성 시 add, 제스처는 발화 시 add). 포즈 추가 시 **양팔 전 채널 명시**(잔상 방지) + `IDLE_ARM_POSES`에 넣으면 DebugPanel `companion:idlepose` 버튼 자동 생성. 몸통 둘러보기는 `pose` 루프(spine 단독) alt로 추가(머리 FK 상속). 상세 [docs/idle-arm-plan.md](docs/idle-arm-plan.md)
 - **컬러 그레이딩 = 화면 레이어**: EffectComposer 포스트프로세싱은 모델 머티리얼 비훼손(개발 원칙1=비퇴행). 컴패니언 투명배경 알파 보존 확인됨. `store.grading` 디폴트=무변화(0). 사진편집식 톤은 머티리얼 튜닝(emission 등) 아닌 이 레이어로 해결
