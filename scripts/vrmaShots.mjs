@@ -1,10 +1,11 @@
 // VRMA vs 절차 손인사 필름스트립 비교 — waveShots.mjs 와 같은 경로(companion 프레이밍)
-//   node vrmaShots.mjs [--char female1] [--clip v02w] [--frames 16] [--every 200]
+//   node vrmaShots.mjs [--char female1] [--frames 16] [--every 200]
+//   클립 지정은 --file /animations/VRMA_03.vrma [--from 1 --to 5] 로 한다.
 import { spawn } from 'child_process';
 import { mkdirSync } from 'fs';
 import puppeteer from 'puppeteer';
 
-const PORT = 5183;
+const PORT = 5192; // 5190 대 = 스크립트 일회용 서버 (5173~5189 는 사람의 dev 몫)
 const REPO = '/Users/Dongmin/new_workspace/drei-avatar-project';
 const arg = (n, f) => {
   const i = process.argv.indexOf(`--${n}`);
@@ -13,7 +14,6 @@ const arg = (n, f) => {
     : f;
 };
 const CHAR = arg('char', null);
-const CLIP = arg('clip', 'v02w');
 const FRAMES = Number(arg('frames', 16));
 const EVERY = Number(arg('every', 200));
 const OUT = arg('out', `${process.cwd()}/vrma-shots`);

@@ -9,10 +9,6 @@
 
 import type { VrmaClipDef } from '../../companion/anim/vrma/clips';
 
-export const VRMA_ENABLED =
-  typeof window !== 'undefined' &&
-  new URLSearchParams(window.location.search).has('vrma');
-
 // VRoid 공식 무료 7종(BOOTH) + 우리 개조본. 원본은 전신 쇼케이스라 대부분 그대로는 못 쓴다 —
 // 정적임 실측(hips 이동/회전, 부위별 각이동)에서 03 이 최소라 개조 베이스가 됐다.
 const BROWSE: VrmaClipDef[] = [

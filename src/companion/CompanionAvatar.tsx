@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 import * as THREE from 'three';
@@ -72,10 +72,16 @@ export function CompanionAvatar({
   onReady,
   onCameraReady,
 }: Props) {
+  // prop 최신값을 프레임 루프에 넘기는 통로(useAnimator 가 useFrame 안에서 읽는다).
+  // 쓰기를 렌더가 아니라 **커밋 시점**에 한다 — 렌더 중 ref 변경은 버려지는 렌더(Suspense
+  // 재시도·StrictMode 이중 렌더)에서도 일어나 커밋 안 된 값이 남을 수 있다.
+  // useLayoutEffect 는 모든 useEffect·모든 프레임보다 먼저라 읽는 쪽이 낡은 값을 볼 수 없다.
   const stateRef = useRef<StateName>('idle');
-  stateRef.current = speaking ? 'speaking' : 'idle';
   const moodRef = useRef<string>('neutral');
-  moodRef.current = mood;
+  useLayoutEffect(() => {
+    stateRef.current = speaking ? 'speaking' : 'idle';
+    moodRef.current = mood;
+  });
 
   // 조립 소스: 업로드 VRM(파츠 0개) 또는 store 캐릭터 base + 카탈로그(에디터 store 공유).
   const characterId = useAvatarStore((s) => s.characterId);
