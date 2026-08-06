@@ -1,12 +1,15 @@
-import { useAvatarStore, GRADING_DEFAULTS, type GradingParams } from '../store'
-import { SliderRow } from './ShaderPanel'
+import { useAvatarStore, GRADING_DEFAULTS, type GradingParams } from '../store';
+import { SliderRow } from './ShaderPanel';
 
 // 사진편집 스타일 톤 조절 — 전역 컬러 그레이딩 (포스트프로세싱)
 export function GradingPanel() {
-  const { grading: vals, setGrading } = useAvatarStore()
+  const { grading: vals, setGrading } = useAvatarStore();
 
-  function update<K extends keyof GradingParams>(key: K, value: GradingParams[K]) {
-    setGrading({ [key]: value })
+  function update<K extends keyof GradingParams>(
+    key: K,
+    value: GradingParams[K],
+  ) {
+    setGrading({ [key]: value });
   }
 
   return (
@@ -14,7 +17,9 @@ export function GradingPanel() {
       <SliderRow
         label="밝기"
         value={vals.brightness}
-        min={-1} max={1} step={0.01}
+        min={-1}
+        max={1}
+        step={0.01}
         display={vals.brightness.toFixed(2)}
         onChange={(v) => update('brightness', v)}
       />
@@ -22,7 +27,9 @@ export function GradingPanel() {
       <SliderRow
         label="대비"
         value={vals.contrast}
-        min={-1} max={1} step={0.01}
+        min={-1}
+        max={1}
+        step={0.01}
         display={vals.contrast.toFixed(2)}
         onChange={(v) => update('contrast', v)}
       />
@@ -30,7 +37,9 @@ export function GradingPanel() {
       <SliderRow
         label="색조"
         value={vals.hue}
-        min={-Math.PI} max={Math.PI} step={0.01}
+        min={-Math.PI}
+        max={Math.PI}
+        step={0.01}
         display={`${Math.round((vals.hue * 180) / Math.PI)}°`}
         onChange={(v) => update('hue', v)}
       />
@@ -38,7 +47,9 @@ export function GradingPanel() {
       <SliderRow
         label="채도"
         value={vals.saturation}
-        min={-1} max={1} step={0.01}
+        min={-1}
+        max={1}
+        step={0.01}
         display={vals.saturation.toFixed(2)}
         onChange={(v) => update('saturation', v)}
       />
@@ -50,5 +61,5 @@ export function GradingPanel() {
         초기화
       </button>
     </div>
-  )
+  );
 }

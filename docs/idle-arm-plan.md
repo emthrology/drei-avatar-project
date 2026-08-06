@@ -11,6 +11,7 @@
 ## 구조 (기존 불변식 준수)
 
 ### 신규 `armPose` 루프 → BASE_LOOPS에 추가
+
 - **idle 상태**: alt 분기로 랜덤 전환
   - 차렷+미세이동 (p 0.5, 길게 유지) — `armL/R.z`에 작은 gaussian → **팔 미세 무게이동**
   - 허리짚기L / 허리짚기R / 뒷짐 (나머지 확률 분배)
@@ -19,20 +20,21 @@
   - 제스처는 큐 후순위(루프는 생성 시, 제스처는 발화 시 add)라 **per-channel 후순위 승** → speaking 중 팔은 제스처가 소유, 제스처 없을 땐 armPose가 rest 유지
 
 ### 몸 비틀어 둘러보기 → 기존 `pose` 루프에 alt 추가
+
 - Spine은 이미 `pose`가 단독 소유 → 큰 `spine.y`(±0.35) 분기 2개 추가(좌/우, 낮은 확률). 머리는 FK로 따라옴 → 둘러보기/뒤돌아보기 느낌. IK 불필요
 
 ## 채널 소유 audit (불변식 OK)
 
-| 루프 | 소유 채널 |
-|------|----------|
-| breathing | chest.inhale |
-| head | head.rotate* |
-| pose | spine.* |
+| 루프               | 소유 채널                  |
+| ------------------ | -------------------------- |
+| breathing          | chest.inhale               |
+| head               | head.rotate*               |
+| pose               | spine.*                    |
 | **armPose (신규)** | **armL/R.z·x, elbowL/R.z** |
-| blink | blink |
+| blink              | blink                      |
 
 - 루프 간 채널 겹침 0
-- 제스처(arm.*, elbow.*, chest.lean/turn, head.g*)와 armPose는 **arm/elbow 겹침** → speaking에서만 공존하며 큐 후순위(제스처)가 승, armPose는 speaking=rest로 양보 → 충돌 없음
+- 제스처(arm._, elbow._, chest.lean/turn, head.g*)와 armPose는 **arm/elbow 겹침** → speaking에서만 공존하며 큐 후순위(제스처)가 승, armPose는 speaking=rest로 양보 → 충돌 없음
 
 ## 검증된 회전축 (CLAUDE.md)
 

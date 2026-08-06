@@ -1,19 +1,25 @@
-import { useState } from 'react'
-import { PartStatus, PartVariant } from '../constants'
+import { useState } from 'react';
+import { PartStatus, PartVariant } from '../constants';
 
 // 카탈로그 그리드의 카드 1칸 — 썸네일 PNG + 라벨 + 선택 체크.
 // variant=null 이면 '원본/없음' 카드(점선 원). 썸네일이 아직 없으면(npm run thumbs 전) 라벨 폴백.
 interface Props {
-  variant: PartVariant | null
-  label: string
-  selected: boolean
-  status?: PartStatus
-  onClick: () => void
+  variant: PartVariant | null;
+  label: string;
+  selected: boolean;
+  status?: PartStatus;
+  onClick: () => void;
 }
 
-export function VariantCard({ variant, label, selected, status, onClick }: Props) {
-  const [thumbFailed, setThumbFailed] = useState(false)
-  const showThumb = variant && !thumbFailed
+export function VariantCard({
+  variant,
+  label,
+  selected,
+  status,
+  onClick,
+}: Props) {
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const showThumb = variant && !thumbFailed;
   return (
     <button
       onClick={onClick}
@@ -48,20 +54,30 @@ export function VariantCard({ variant, label, selected, status, onClick }: Props
         </span>
       )}
       {variant == null && (
-        <span className="absolute inset-x-0 bottom-0 text-[9px] text-gray-300 py-0.5">원본</span>
+        <span className="absolute inset-x-0 bottom-0 text-[9px] text-gray-300 py-0.5">
+          원본
+        </span>
       )}
 
       {/* 선택 체크 */}
       {selected && (
-        <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-sky-500 text-white text-[10px] flex items-center justify-center">✓</span>
+        <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-sky-500 text-white text-[10px] flex items-center justify-center">
+          ✓
+        </span>
       )}
       {/* 로드 상태 */}
       {status === 'loading' && (
-        <span className="absolute top-1 left-1 w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" title="로딩" />
+        <span
+          className="absolute top-1 left-1 w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"
+          title="로딩"
+        />
       )}
       {status === 'error' && (
-        <span className="absolute top-1 left-1 w-2.5 h-2.5 rounded-full bg-red-500" title="에러" />
+        <span
+          className="absolute top-1 left-1 w-2.5 h-2.5 rounded-full bg-red-500"
+          title="에러"
+        />
       )}
     </button>
-  )
+  );
 }

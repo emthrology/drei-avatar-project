@@ -16,12 +16,12 @@
 
 ## 효과 ↔ 사진편집 대응
 
-| 효과 (`@react-three/postprocessing`) | 사진편집 대응 | 우선 |
-|---|---|---|
-| `BrightnessContrast` | 밝기 / 대비 | ★ 1차 |
-| `HueSaturation` | 색조 / 채도 | ★ 1차 |
-| `ToneMapping` | 노출/필름 룩 | 선택 |
-| `Vignette` | 비네팅 | 선택 |
+| 효과 (`@react-three/postprocessing`) | 사진편집 대응 | 우선  |
+| ------------------------------------ | ------------- | ----- |
+| `BrightnessContrast`                 | 밝기 / 대비   | ★ 1차 |
+| `HueSaturation`                      | 색조 / 채도   | ★ 1차 |
+| `ToneMapping`                        | 노출/필름 룩  | 선택  |
+| `Vignette`                           | 비네팅        | 선택  |
 
 ## 버전 제약 (확인 완료)
 
@@ -41,19 +41,23 @@
 ## 단계 (점진)
 
 ### 1단계 — docs 개정 ✅ (이 문서)
+
 방향 전환 기록 + 폐기 근거 보존
 
 ### 2단계 — 의존성 + store
+
 - `npm i @react-three/postprocessing@2.17.0`
 - `store.ts`에 `GradingParams` + `GRADING_DEFAULTS`(무변화) + `setGrading` 추가
 
 ### 3단계 — 에디터 적용 (먼저, 안전)
+
 - 에디터 씬(불투명 배경 #1a1a2e)에 `<EffectComposer>` 추가 → **투명도 이슈 없음**
   - ※ 당시 파일명은 `AvatarScene`. 이후 에디터 조립 전환으로 삭제됐고 현재는 [EditorScene.tsx](../src/editor/EditorScene.tsx)가 그 자리 — 실제 EffectComposer는 [GradingEffects.tsx](../src/components/GradingEffects.tsx)로 분리돼 양 씬이 공유한다
 - `GradingPanel` 슬라이더 → 즉시 톤 변화 확인
 - 빌드/육안 검증
 
 ### 4단계 — 컴패니언 확장 (검증 후)
+
 - 컴패니언 Canvas는 **투명 배경(`alpha:true`)** → EffectComposer가 알파를 깨뜨릴 수 있음. 알파 통과(`<EffectComposer>` 알파 처리 + 효과별 blend) 검증 필요
 - 풀스크린 패스 = 게임 위 오버레이엔 비용 → 검증 후 판단 (성능 자동조절과 연계 가능 — 현재는 `DprGovernor`로 구현됨, CLAUDE.md 참조)
 - 안 되면 **에디터 전용으로 확정**(원칙2: 억지로 넣지 않음)
@@ -63,18 +67,22 @@
 원칙1·2로 판정해 **전부 폐기**. 근거 데이터:
 
 ### Emission — 컷 (원칙1·2 모두 위반)
+
 - 6개 머티리얼 전부 `emissiveFactor=[1,1,1]` + 별도 emissive 텍스처(1024², **13.8KB=사실상 검정**)
 - MToon은 `emissive × emissiveMap`이라 텍스처 검정이면 factor 키워도 **0** → 그냥은 안 보임
 - 보이게 하려면 `emissiveMap=null`로 모델 텍스처 제거(원칙1 위반) → 그래도 **파츠 균일 단색 발광**뿐(눈만 빛나기 불가, 얼굴/눈 emissive 셋업 공유)
 - 이 모델엔 발광 액센트 없음 → 가치 없음(원칙2)
 
 ### Outline 색 — 컷 (전역은 원칙1 위반, 파츠별로도 가치 약함)
+
 - outline색이 **파츠별로 다름**: 얼굴/입/눈 검정, 피부 어두운 빨강 `[0.061,0.009,0.014]`, **머리카락 청록 `[0.157,0.408,0.35]`**
 - 전역 덮어쓰기면 머리카락 청록 외곽선 파괴(원칙1). 파츠별로 하면 비파괴지만 사용자 필요성 낮음(원칙2)
 
 ### shadingShift — 컷 (전역은 원칙1 위반, 정면 작은 뷰서 미묘)
+
 - 파츠별 편차 큼: face 0.9 / eye 0.23 / body -0.05 / hair -0.2 / tops -0.35
 - 전역 덮어쓰기면 음영 뭉갬(원칙1). 효과 자체도 정면 작은 뷰서 미묘(원칙2)
 
 ### 참고: 기존 전역 toony/outlineWidth의 잠재 퇴행
+
 - 현재 [ShaderPanel](../src/components/ShaderPanel.tsx)의 전역 `toony=0.9` 디폴트가 로드 시 모든 머티리얼에 덮어써서 tops(0.35)·hair(0.8) authored 값을 뭉갬 = 약한 원칙1 위반(기존 동작). 컬러 그레이딩과 무관하나, 추후 정리 시 "실제값 디폴트 읽기"로 교정 가능

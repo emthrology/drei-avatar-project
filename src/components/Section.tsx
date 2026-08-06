@@ -1,10 +1,10 @@
-import { type ReactNode } from 'react'
+import { type ReactNode } from 'react';
 
 interface SectionProps {
-  title: string
-  open: boolean
-  onToggle: () => void
-  children: ReactNode
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
 }
 
 // 에디터 패널 공용 접이식 섹션 (아코디언). 열림 상태는 부모가 소유(controlled)해
@@ -17,7 +17,11 @@ export function Section({ title, open, onToggle, children }: SectionProps) {
         className="flex w-full items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-300 hover:bg-gray-800/50 transition-colors"
       >
         <span>{title}</span>
-        <span className={`text-gray-500 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}>▶</span>
+        <span
+          className={`text-gray-500 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
+        >
+          ▶
+        </span>
       </button>
       {/* grid 0fr↔1fr: 동적 높이도 부드럽게 ease (display 토글은 애니메이션 불가) */}
       <div
@@ -28,5 +32,5 @@ export function Section({ title, open, onToggle, children }: SectionProps) {
         <div className="overflow-hidden">{children}</div>
       </div>
     </div>
-  )
+  );
 }

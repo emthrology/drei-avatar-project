@@ -13,7 +13,14 @@
 import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import type { VRM } from '@pixiv/three-vrm';
-import { sampleArm, evaluateArm, type ArmSample, type ArmVerdict, type ArmTargets, type Side } from './probe';
+import {
+  sampleArm,
+  evaluateArm,
+  type ArmSample,
+  type ArmVerdict,
+  type ArmTargets,
+  type Side,
+} from './probe';
 
 export interface ProbeResult extends ArmVerdict {
   side: Side;
@@ -76,7 +83,9 @@ export function useMotionProbe(vrmRef: React.MutableRefObject<VRM | null>) {
       // Hand 본이 없는 모델(비VRoid 등)이거나 VRM 미로드 — 조용히 실패하지 않고 명시한다
       const err = { error: 'no samples — Hand/Hips 본 없음 또는 VRM 미로드' };
       window.__probeResult = err;
-      window.dispatchEvent(new CustomEvent('companion:probe:done', { detail: err }));
+      window.dispatchEvent(
+        new CustomEvent('companion:probe:done', { detail: err }),
+      );
       return;
     }
 
@@ -89,6 +98,8 @@ export function useMotionProbe(vrmRef: React.MutableRefObject<VRM | null>) {
       samples: rec.samples,
     };
     window.__probeResult = result;
-    window.dispatchEvent(new CustomEvent('companion:probe:done', { detail: result }));
+    window.dispatchEvent(
+      new CustomEvent('companion:probe:done', { detail: result }),
+    );
   });
 }

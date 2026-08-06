@@ -52,6 +52,7 @@ Channels.apply()에서:
 ```
 
 moods.ts 제스처에서 목표 좌표를 vs로 지정하면 됨:
+
 ```ts
 {
   name: 'gesture',

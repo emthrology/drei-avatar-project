@@ -14,176 +14,203 @@
 //
 // renderThumbs.mjs 와 동일 패턴(vite 기동 → puppeteer → window 값 회수).
 
-import { spawn } from 'child_process'
-import puppeteer from 'puppeteer'
+import { spawn } from 'child_process';
+import puppeteer from 'puppeteer';
 
-const PORT = 5180
+const PORT = 5180;
 
 function arg(name, fallback) {
-  const i = process.argv.indexOf(`--${name}`)
+  const i = process.argv.indexOf(`--${name}`);
   return i >= 0 && process.argv[i + 1] && !process.argv[i + 1].startsWith('--')
     ? process.argv[i + 1]
-    : fallback
+    : fallback;
 }
-const has = (name) => process.argv.includes(`--${name}`)
+const has = (name) => process.argv.includes(`--${name}`);
 
-const SIDE = arg('side', 'R')
+const SIDE = arg('side', 'R');
 // 쉼표로 여러 제스처를 주면 브라우저 세션 하나에서 순차 측정한다 (vite 기동 비용 1회).
 // 자세 스윕은 반복 실행이 많아 매번 재기동하면 대부분의 시간이 부팅에 쓰인다.
-const GESTURE = arg('gesture', null)
-const GESTURES = GESTURE === null ? [] : String(GESTURE).split(',').map((s) => s.trim())
-const WAVE = has('wave')
+const GESTURE = arg('gesture', null);
+const GESTURES =
+  GESTURE === null
+    ? []
+    : String(GESTURE)
+        .split(',')
+        .map((s) => s.trim());
+const WAVE = has('wave');
 // 한 측정이 끝나고 다음 트리거까지 팔이 rest 로 돌아올 시간
-const SETTLE = Number(arg('settle', 1600))
+const SETTLE = Number(arg('settle', 1600));
 // 트리거 후 녹화 시작까지 대기(ms). 팔을 드는 **전환 구간**을 빼고 흔드는 구간만 재기 위한 것.
 // (raise 를 포함해 재면 '상완 정지도'가 항상 불합격이라 어떤 동작도 통과 불가 — 측정 구간을
 //  동작 단계에 맞추는 것이지 기준을 낮추는 것이 아니다.)
 // 손인사 기본값은 VRMA 판(anim/vrma/clips.ts VRMA_WAVE)의 타이밍에 맞춘 것:
 //   클립 3.0s = fadeIn 400ms + 흔들기 + fadeOut 500ms → 안정 구간 500~2400ms 를 잰다.
 //   (창을 클립보다 길게 잡으면 팔이 내려오는 복귀 구간까지 섞여 주축·정지도가 전부 깨진다)
-const WAIT = Number(arg('wait', WAVE ? 500 : 120))
-const MS = Number(arg('ms', WAVE ? 1900 : 3000))
-const CHAR = arg('char', null)
-const AS_JSON = has('json')
+const WAIT = Number(arg('wait', WAVE ? 500 : 120));
+const MS = Number(arg('ms', WAVE ? 1900 : 3000));
+const CHAR = arg('char', null);
+const AS_JSON = has('json');
 
 function waitForServer(proc) {
   return new Promise((resolve, reject) => {
     const onData = (d) => {
-      const s = d.toString()
-      if (/Local:.*http/.test(s) || new RegExp(`localhost:${PORT}`).test(s)) resolve()
-    }
-    proc.stdout.on('data', onData)
-    proc.stderr.on('data', onData)
-    proc.on('exit', (code) => reject(new Error(`vite 종료(code ${code})`)))
-    setTimeout(() => reject(new Error('vite 기동 타임아웃')), 30000)
-  })
+      const s = d.toString();
+      if (/Local:.*http/.test(s) || new RegExp(`localhost:${PORT}`).test(s))
+        resolve();
+    };
+    proc.stdout.on('data', onData);
+    proc.stderr.on('data', onData);
+    proc.on('exit', (code) => reject(new Error(`vite 종료(code ${code})`)));
+    setTimeout(() => reject(new Error('vite 기동 타임아웃')), 30000);
+  });
 }
 
 function report(r) {
   if (AS_JSON) {
-    console.log(JSON.stringify(r, null, 2))
-    return
+    console.log(JSON.stringify(r, null, 2));
+    return;
   }
   if (r.error) {
-    console.error(`❌ ${r.error}`)
-    return
+    console.error(`❌ ${r.error}`);
+    return;
   }
-  console.log(`\n${r.pass ? '✅ PASS' : '❌ FAIL'}  ${r.side}팔 · ${r.sampleCount}샘플 / ${r.durationMs}ms`)
-  console.log('─'.repeat(58))
+  console.log(
+    `\n${r.pass ? '✅ PASS' : '❌ FAIL'}  ${r.side}팔 · ${r.sampleCount}샘플 / ${r.durationMs}ms`,
+  );
+  console.log('─'.repeat(58));
   for (const c of r.checks) {
-    const mark = c.pass ? '✓' : '✗'
-    console.log(`  ${mark} ${c.name.padEnd(12)} ${String(c.value).padStart(10)}   기대 ${c.want}`)
+    const mark = c.pass ? '✓' : '✗';
+    console.log(
+      `  ${mark} ${c.name.padEnd(12)} ${String(c.value).padStart(10)}   기대 ${c.want}`,
+    );
   }
-  console.log('─'.repeat(58))
+  console.log('─'.repeat(58));
   console.log(
     `  손목  span x=${r.span.x.toFixed(4)} y=${r.span.y.toFixed(4)} z=${r.span.z.toFixed(4)}  ` +
-    `주축=${r.swingAxis}`,
-  )
+      `주축=${r.swingAxis}`,
+  );
   if (r.torsoClearance !== undefined) {
     console.log(
       `  몸통이격 ${r.torsoClearance.toFixed(4)}   손바닥 바깥 ${(r.palmOut ?? 0).toFixed(3)} / 정면 ${(r.palmFwd ?? 0).toFixed(3)}`,
-    )
-  if (r.hipsYaw)
-    console.log(
-      `  몸통 yaw  ${r.hipsYaw.min.toFixed(1)}° ~ ${r.hipsYaw.max.toFixed(1)}°  (마지막 ${r.hipsYaw.last.toFixed(1)}°)`,
-    )
+    );
+    if (r.hipsYaw)
+      console.log(
+        `  몸통 yaw  ${r.hipsYaw.min.toFixed(1)}° ~ ${r.hipsYaw.max.toFixed(1)}°  (마지막 ${r.hipsYaw.last.toFixed(1)}°)`,
+      );
   }
   if (r.tipSpan) {
     console.log(
       `  손끝  span x=${r.tipSpan.x.toFixed(4)} y=${r.tipSpan.y.toFixed(4)} z=${r.tipSpan.z.toFixed(4)}  ` +
-      `주축=${r.tipSwingAxis}`,
-    )
+        `주축=${r.tipSwingAxis}`,
+    );
   }
-  console.log()
+  console.log();
 }
 
 async function main() {
-  // PROBE_OWNED: 이 서버는 일회용이라 dev 서버 신원 파일(vite.config.ts)을 남기면 안 된다.
-  // 사용자 dev 서버가 IPv6 로 같은 포트에 떠 있으면 이 서버가 IPv4 로 나란히 붙어, 기록을
-  // 덮어쓴 뒤 종료하며 지워버린다 → probeAttach 가 살아있는 dev 서버를 못 찾는다.
-  const server = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], {
-    stdio: 'pipe',
-    env: { ...process.env, PROBE_OWNED: '1' },
-  })
-  let browser
+  const server = spawn(
+    'npx',
+    ['vite', '--port', String(PORT), '--strictPort'],
+    {
+      stdio: 'pipe',
+    },
+  );
+  let browser;
   try {
-    await waitForServer(server)
-    browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] })
-    const page = await browser.newPage()
-    await page.setViewport({ width: 1280, height: 800 })
-    page.on('pageerror', (e) => console.error('  [page error]', e.message))
+    await waitForServer(server);
+    browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox'],
+    });
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 800 });
+    page.on('pageerror', (e) => console.error('  [page error]', e.message));
 
-    const url = `http://localhost:${PORT}/?mode=companion${CHAR ? `&char=${CHAR}` : ''}`
-    await page.goto(url, { waitUntil: 'networkidle0' })
+    const url = `http://localhost:${PORT}/?mode=companion${CHAR ? `&char=${CHAR}` : ''}`;
+    await page.goto(url, { waitUntil: 'networkidle0' });
 
     // VRM 조립 완료 대기 — 프로브가 본을 못 찾으면 무의미하므로 확실히 기다린다
-    await page.waitForFunction(
-      "document.body.innerText.includes('ready') || document.body.innerText.includes('speaking')",
-      { timeout: 60000 },
-    ).catch(() => console.error('  ⚠️ ready 상태 확인 실패 — 그대로 진행'))
-    await new Promise((r) => setTimeout(r, 1500)) // idle 루프 안정화
+    await page
+      .waitForFunction(
+        "document.body.innerText.includes('ready') || document.body.innerText.includes('speaking')",
+        { timeout: 60000 },
+      )
+      .catch(() => console.error('  ⚠️ ready 상태 확인 실패 — 그대로 진행'));
+    await new Promise((r) => setTimeout(r, 1500)); // idle 루프 안정화
 
     // 트리거 1회 → 대기 → 녹화 → 판정 회수
     async function runOnce(trigger, label) {
       await page.evaluate(() => {
-        window.__probeResult = undefined
-      })
-      if (trigger) await trigger()
-      await new Promise((r) => setTimeout(r, WAIT))
+        window.__probeResult = undefined;
+      });
+      if (trigger) await trigger();
+      await new Promise((r) => setTimeout(r, WAIT));
       await page.evaluate(
         (ms, side) => {
-          window.dispatchEvent(new CustomEvent('companion:probe', { detail: { ms, side } }))
+          window.dispatchEvent(
+            new CustomEvent('companion:probe', { detail: { ms, side } }),
+          );
         },
         MS,
         SIDE,
-      )
-      await page.waitForFunction('window.__probeResult !== undefined', { timeout: MS + 20000 })
-      const r = await page.evaluate(() => window.__probeResult)
-      if (!AS_JSON && r && r.samples) delete r.samples
-      if (label) console.log(`\n■ ${label}`)
-      report(r)
-      return r
+      );
+      await page.waitForFunction('window.__probeResult !== undefined', {
+        timeout: MS + 20000,
+      });
+      const r = await page.evaluate(() => window.__probeResult);
+      if (!AS_JSON && r && r.samples) delete r.samples;
+      if (label) console.log(`\n■ ${label}`);
+      report(r);
+      return r;
     }
 
-    let result
+    let result;
     if (WAVE) {
       result = await runOnce(() =>
-        page.evaluate(() => window.dispatchEvent(new CustomEvent('companion:wave'))),
-      )
+        page.evaluate(() =>
+          window.dispatchEvent(new CustomEvent('companion:wave')),
+        ),
+      );
     } else if (GESTURES.length > 1) {
-      const rs = []
+      const rs = [];
       for (const g of GESTURES) {
         rs.push(
           await runOnce(
             () =>
               page.evaluate((i) => {
                 window.dispatchEvent(
-                  new CustomEvent('companion:gesture', { detail: { index: Number(i) } }),
-                )
+                  new CustomEvent('companion:gesture', {
+                    detail: { index: Number(i) },
+                  }),
+                );
               }, g),
             `gesture ${g}`,
           ),
-        )
-        await new Promise((r) => setTimeout(r, SETTLE)) // 다음 트리거 전 팔 복귀 대기
+        );
+        await new Promise((r) => setTimeout(r, SETTLE)); // 다음 트리거 전 팔 복귀 대기
       }
-      result = { pass: rs.every((r) => r && r.pass) }
+      result = { pass: rs.every((r) => r && r.pass) };
     } else if (GESTURES.length === 1) {
       result = await runOnce(() =>
         page.evaluate((i) => {
-          window.dispatchEvent(new CustomEvent('companion:gesture', { detail: { index: Number(i) } }))
+          window.dispatchEvent(
+            new CustomEvent('companion:gesture', {
+              detail: { index: Number(i) },
+            }),
+          );
         }, GESTURES[0]),
-      )
+      );
     } else {
-      result = await runOnce(null)
+      result = await runOnce(null);
     }
-    process.exitCode = result && result.pass ? 0 : 1
+    process.exitCode = result && result.pass ? 0 : 1;
   } finally {
-    if (browser) await browser.close()
-    server.kill('SIGTERM')
+    if (browser) await browser.close();
+    server.kill('SIGTERM');
   }
 }
 
 main().catch((e) => {
-  console.error('❌ probeMotion 실패:', e)
-  process.exit(1)
-})
+  console.error('❌ probeMotion 실패:', e);
+  process.exit(1);
+});

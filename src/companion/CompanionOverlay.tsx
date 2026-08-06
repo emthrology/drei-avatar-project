@@ -85,8 +85,9 @@ export function CompanionOverlay({
     (speak: (payload: SpeakPayload) => void) => {
       speakRef.current = speak;
       updateStatus('ready');
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     },
+    // updateStatus 는 매 렌더 새로 만들어지지만 onStatusChange 만 실제 의존이다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [onStatusChange],
   );
 
@@ -116,8 +117,9 @@ export function CompanionOverlay({
       } else {
         setTimeout(end, 5000);
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     },
+    // updateStatus 는 매 렌더 새로 만들어지지만 onStatusChange 만 실제 의존이다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [lang, gender, onStatusChange, onSpeak],
   );
 
