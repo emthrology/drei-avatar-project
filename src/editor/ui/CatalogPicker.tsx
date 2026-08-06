@@ -1,25 +1,37 @@
-import { useState } from 'react'
-import { PartCategory, PartCategoryDef, PartStatus, Selection } from '../constants'
-import { VariantCard } from './VariantCard'
+import { useState } from 'react';
+import {
+  PartCategory,
+  PartCategoryDef,
+  PartStatus,
+  Selection,
+} from '../constants';
+import { VariantCard } from './VariantCard';
 
 // VRoid식 피커: 상단 카테고리 탭 + 활성 카테고리의 변형 썸네일 그리드.
 // 카테고리 슬롯당 1개 선택(swap-on-select). allowNone 이면 '원본/없음' 카드 선두.
 // (스크린샷의 좌측 서브카테고리 rail 은 서브카테고리 도입 시 추가 — 지금은 플랫 4 카테고리.)
-const EYE_SWATCHES = ['#5a8fd6', '#5fae6b', '#b0553a', '#8a6bd0']
+const EYE_SWATCHES = ['#5a8fd6', '#5fae6b', '#b0553a', '#8a6bd0'];
 
 interface Props {
-  catalog: PartCategoryDef[]
-  selection: Selection
-  status: Record<string, PartStatus>
-  onSelect: (cat: PartCategory, variantId: string | null) => void
-  eyeColor: string | null
-  onEyeColor: (hex: string | null) => void
+  catalog: PartCategoryDef[];
+  selection: Selection;
+  status: Record<string, PartStatus>;
+  onSelect: (cat: PartCategory, variantId: string | null) => void;
+  eyeColor: string | null;
+  onEyeColor: (hex: string | null) => void;
 }
 
-export function CatalogPicker({ catalog, selection, status, onSelect, eyeColor, onEyeColor }: Props) {
-  const [active, setActive] = useState<PartCategory>(catalog[0].id)
+export function CatalogPicker({
+  catalog,
+  selection,
+  status,
+  onSelect,
+  eyeColor,
+  onEyeColor,
+}: Props) {
+  const [active, setActive] = useState<PartCategory>(catalog[0].id);
   // 카탈로그(캐릭터) 교체 시 active 가 새 카탈로그에 없을 수 있다(예: female 은 hair 탭 없음) → 첫 탭으로 클램프.
-  const cat = catalog.find((c) => c.id === active) ?? catalog[0]
+  const cat = catalog.find((c) => c.id === active) ?? catalog[0];
 
   return (
     <div className="flex flex-col h-full">
@@ -30,7 +42,9 @@ export function CatalogPicker({ catalog, selection, status, onSelect, eyeColor, 
             key={c.id}
             onClick={() => setActive(c.id)}
             className={`px-3 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              cat.id === c.id ? 'border-sky-400 text-sky-300' : 'border-transparent text-gray-400 hover:text-gray-200'
+              cat.id === c.id
+                ? 'border-sky-400 text-sky-300'
+                : 'border-transparent text-gray-400 hover:text-gray-200'
             }`}
           >
             {c.label}
@@ -86,5 +100,5 @@ export function CatalogPicker({ catalog, selection, status, onSelect, eyeColor, 
         )}
       </div>
     </div>
-  )
+  );
 }

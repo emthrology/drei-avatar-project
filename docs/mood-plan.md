@@ -43,23 +43,25 @@ angry     : expression { angry: 0.5 }              gestures = 날카로움 (ease
 
 ```ts
 EVENT_MOODS: Record<GameEventType, MoodName> = {
-  player_die:  'sad',
+  player_die: 'sad',
   level_clear: 'happy',
-  near_miss:   'surprised',
-  jump:        'happy',
-  start:       'happy',
-}
+  near_miss: 'surprised',
+  jump: 'happy',
+  start: 'happy',
+};
 ```
 
 ## 단계별 구현
 
 ### 1단계 — 감정 채널 인프라
+
 - `channels.ts` BASELINE에 `emo.happy/angry/sad/relaxed/surprised` 추가 (전부 0)
 - `Channels.apply()`에 5개 `expressionManager.setValue(preset, v('emo.X'))` 추가
 - preset 존재 감지 → 없으면 스킵 (비VRoid fallback, viseme morphMap과 동일 패턴)
   - 생성자에서 `expressionManager.getExpression(name)` 으로 존재 여부 캐싱
 
 ### 2단계 — 무드 정의 + 표정 전환
+
 - `moods.ts` `Mood` 타입에 `expression: Partial<Record<EmotionName, number>>` 추가
 - 무드 5종 정의 (위 표)
 - `useAnimator`:
@@ -67,21 +69,24 @@ EVENT_MOODS: Record<GameEventType, MoodName> = {
   - 무드 변경 감지 시 표정 전환 클립 스케줄:
     ```ts
     function moodExprClip(expr): AnimTemplate {
-      const vs = {}
-      for (const e of ALL_EMOTIONS) vs[`emo.${e}`] = [expr[e] ?? 0]  // 비활성=0 명시
-      return { name: 'mood-expr', ease: 3, dt: [[400, 600]], vs }
+      const vs = {};
+      for (const e of ALL_EMOTIONS) vs[`emo.${e}`] = [expr[e] ?? 0]; // 비활성=0 명시
+      return { name: 'mood-expr', ease: 3, dt: [[400, 600]], vs };
     }
-    scheduler.remove('mood-expr'); scheduler.add(moodExprClip(MOODS[mood].expression), false)
+    scheduler.remove('mood-expr');
+    scheduler.add(moodExprClip(MOODS[mood].expression), false);
     ```
   - hold-last가 전환 후 표정 유지. factory 선두 null로 현재값→target 부드럽게 ramp
 
 ### 3단계 — 이벤트 매핑 + 배선
+
 - `locales.ts`에 `EVENT_MOODS` 테이블 추가, `MoodName` 타입 export
 - `useGameEvents`: 핸들러에서 이벤트 타입 → 무드 결정, `onSpeak(reaction, mood)` 시그니처 확장
 - `CompanionOverlay`: `mood` state 추가. handleReaction에서 setMood, 발화 종료 timeout(말풍선 clear와 동일 지점)에서 `setMood('neutral')`
 - `CompanionAvatar`: `mood` prop → `moodRef` (speaking → stateRef와 동일 패턴)
 
 ### 4단계 — 제스처 톤
+
 - 무드별 제스처 세트 (curated, 2~4종씩). neutral은 기존 10종 유지
 - 톤 차별화 가이드:
   - happy: ease 1.5~2.0 (탄력), 진폭↑, dt 짧게 (빠른 반응)

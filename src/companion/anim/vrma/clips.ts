@@ -14,21 +14,21 @@
 // 유지해야 한다(표정을 파일에 굽지 말 것 — 무드는 런타임 상태다).
 
 export interface VrmaClipDef {
-  id: string
-  label: string
-  url: string
+  id: string;
+  label: string;
+  url: string;
   /** 구간 트림(초). 공식 7종은 전신 쇼케이스라 쓸 구간이 일부다 */
-  from?: number
-  to?: number
+  from?: number;
+  to?: number;
   /** 진입/복귀 블렌드(ms) — 복귀 블렌드가 "동작 후 idle 로 돌아오기"를 담당 */
-  fadeIn?: number
-  fadeOut?: number
+  fadeIn?: number;
+  fadeOut?: number;
   /**
    * hips 이동 트랙 유지(기본 false = 제거). 7종은 전신 카메라를 전제로 저작돼 몸이 최대
    * 0.34m 이동/0.63m 상하하는데, 컴패니언은 로드 시 1회 산출한 고정 상반신 프레이밍이라
    * 그대로 재생하면 프레임을 벗어난다(실측). 회전은 그대로 둔다 — 전신 일관성이 깨지므로.
    */
-  keepHipsPosition?: boolean
+  keepHipsPosition?: boolean;
 }
 
 /**
@@ -39,11 +39,11 @@ export function filterTracks<T extends { name: string }>(
   tracks: readonly T[],
   dropPosition: boolean,
 ): T[] {
-  if (!dropPosition) return [...tracks]
+  if (!dropPosition) return [...tracks];
   return tracks.filter((t) => {
-    const dot = t.name.lastIndexOf('.')
-    return (dot < 0 ? '' : t.name.slice(dot + 1)) !== 'position'
-  })
+    const dot = t.name.lastIndexOf('.');
+    return (dot < 0 ? '' : t.name.slice(dot + 1)) !== 'position';
+  });
 }
 
 // ─── 카탈로그 ────────────────────────────────────────────────────────────────
@@ -64,8 +64,8 @@ export const VRMA_WAVE: VrmaClipDef = {
   to: 5.9,
   fadeIn: 400,
   fadeOut: 500,
-}
+};
 
 export const VRMA_CLIPS: Record<string, VrmaClipDef> = {
   [VRMA_WAVE.id]: VRMA_WAVE,
-}
+};

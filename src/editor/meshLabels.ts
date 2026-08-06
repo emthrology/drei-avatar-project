@@ -20,29 +20,31 @@
 // 위에서부터 첫 매칭 채택 → **구체적인 부위를 앞에**.
 const LABEL_RULES: { test: RegExp; label: string }[] = [
   // 눈 (EYE 타입) — Iris/Highlight/White 는 Face* 보다 구체적이라 먼저
-  { test: /EyeIris/i,      label: '눈동자' },
+  { test: /EyeIris/i, label: '눈동자' },
   { test: /EyeHighlight/i, label: '눈 하이라이트' },
-  { test: /EyeWhite/i,     label: '흰자' },
+  { test: /EyeWhite/i, label: '흰자' },
   // 얼굴 부속 (FACE 타입) — FaceMouth/Brow/Eyeline/Eyelash. 피부(_Face_NN_SKIN)보다 먼저
-  { test: /FaceEyelash/i,  label: '속눈썹' },
-  { test: /FaceEyeline/i,  label: '눈매' },
-  { test: /FaceBrow/i,     label: '눈썹' },
-  { test: /FaceMouth/i,    label: '입' },
+  { test: /FaceEyelash/i, label: '속눈썹' },
+  { test: /FaceEyeline/i, label: '눈매' },
+  { test: /FaceBrow/i, label: '눈썹' },
+  { test: /FaceMouth/i, label: '입' },
   // 피부 — 얼굴 피부(_Face_NN_SKIN: Face 뒤에 숫자)와 몸 피부(_Body_)
-  { test: /_Face_\d/i,     label: '피부(얼굴)' },
-  { test: /_Body_/i,       label: '피부(몸)' },
+  { test: /_Face_\d/i, label: '피부(얼굴)' },
+  { test: /_Body_/i, label: '피부(몸)' },
   // 헤어 — HairBack(뒷머리)을 Hair(앞/전체)보다 먼저
-  { test: /HairBack/i,     label: '뒷머리' },
-  { test: /Hair/i,         label: '머리' },
+  { test: /HairBack/i, label: '뒷머리' },
+  { test: /Hair/i, label: '머리' },
   // 의류
-  { test: /Tops/i,         label: '상의' },
-  { test: /Bottoms/i,      label: '하의' },
-  { test: /Shoes/i,        label: '신발' },
-]
+  { test: /Tops/i, label: '상의' },
+  { test: /Bottoms/i, label: '하의' },
+  { test: /Shoes/i, label: '신발' },
+];
 
 // 머티리얼 이름 → 부위 라벨. 미매칭이면 null(소비처가 원본 메시 이름으로 fallback).
-export function labelForMaterialName(matName: string | undefined | null): string | null {
-  if (!matName) return null
-  for (const r of LABEL_RULES) if (r.test.test(matName)) return r.label
-  return null
+export function labelForMaterialName(
+  matName: string | undefined | null,
+): string | null {
+  if (!matName) return null;
+  for (const r of LABEL_RULES) if (r.test.test(matName)) return r.label;
+  return null;
 }

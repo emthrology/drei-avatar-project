@@ -31,7 +31,10 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       // `_` 접두 인자는 "안 쓴다"는 의도를 코드가 이미 표시한 것 (예: handleAvatarLoad(url, _label))
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_' },
+      ],
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },

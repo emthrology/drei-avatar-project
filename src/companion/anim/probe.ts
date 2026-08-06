@@ -46,7 +46,10 @@ export interface ArmSample {
 const _v = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 
-function localPos(node: THREE.Object3D, ref: THREE.Object3D): [number, number, number] {
+function localPos(
+  node: THREE.Object3D,
+  ref: THREE.Object3D,
+): [number, number, number] {
   node.getWorldPosition(_v);
   ref.worldToLocal(_v);
   return [_v.x, _v.y, _v.z];
@@ -60,20 +63,34 @@ function localPos(node: THREE.Object3D, ref: THREE.Object3D): [number, number, n
 export function sampleArm(vrm: VRM, side: Side, t: number): ArmSample | null {
   const h = vrm.humanoid;
   const B = VRMHumanBoneName;
-  const shoulder = h.getNormalizedBoneNode(side === 'L' ? B.LeftUpperArm : B.RightUpperArm);
-  const elbow = h.getNormalizedBoneNode(side === 'L' ? B.LeftLowerArm : B.RightLowerArm);
+  const shoulder = h.getNormalizedBoneNode(
+    side === 'L' ? B.LeftUpperArm : B.RightUpperArm,
+  );
+  const elbow = h.getNormalizedBoneNode(
+    side === 'L' ? B.LeftLowerArm : B.RightLowerArm,
+  );
   const hand = h.getNormalizedBoneNode(side === 'L' ? B.LeftHand : B.RightHand);
   const ref = h.getNormalizedBoneNode(B.Hips);
   if (!shoulder || !elbow || !hand || !ref) return null;
 
   // 손끝: 중지 말단부터 내려오며 있는 것을 쓴다 (부분 리그 모델 안전)
   const tipBone =
-    h.getNormalizedBoneNode(side === 'L' ? B.LeftMiddleDistal : B.RightMiddleDistal) ??
-    h.getNormalizedBoneNode(side === 'L' ? B.LeftMiddleIntermediate : B.RightMiddleIntermediate) ??
-    h.getNormalizedBoneNode(side === 'L' ? B.LeftMiddleProximal : B.RightMiddleProximal);
+    h.getNormalizedBoneNode(
+      side === 'L' ? B.LeftMiddleDistal : B.RightMiddleDistal,
+    ) ??
+    h.getNormalizedBoneNode(
+      side === 'L' ? B.LeftMiddleIntermediate : B.RightMiddleIntermediate,
+    ) ??
+    h.getNormalizedBoneNode(
+      side === 'L' ? B.LeftMiddleProximal : B.RightMiddleProximal,
+    );
 
-  const indexBone = h.getNormalizedBoneNode(side === 'L' ? B.LeftIndexProximal : B.RightIndexProximal);
-  const littleBone = h.getNormalizedBoneNode(side === 'L' ? B.LeftLittleProximal : B.RightLittleProximal);
+  const indexBone = h.getNormalizedBoneNode(
+    side === 'L' ? B.LeftIndexProximal : B.RightIndexProximal,
+  );
+  const littleBone = h.getNormalizedBoneNode(
+    side === 'L' ? B.LeftLittleProximal : B.RightLittleProximal,
+  );
 
   // Hips 월드 yaw — Y축 twist 성분만 뽑아 각도로
   ref.getWorldQuaternion(_q);
@@ -188,11 +205,20 @@ function quatAngle(a: ArmSample['armQuat'], b: ArmSample['armQuat']): number {
 
 /** 점 p 와 선분 ab 사이 최소거리 */
 function pointSegDist(p: number[], a: number[], b: number[]): number {
-  const abx = b[0] - a[0], aby = b[1] - a[1], abz = b[2] - a[2];
-  const apx = p[0] - a[0], apy = p[1] - a[1], apz = p[2] - a[2];
+  const abx = b[0] - a[0],
+    aby = b[1] - a[1],
+    abz = b[2] - a[2];
+  const apx = p[0] - a[0],
+    apy = p[1] - a[1],
+    apz = p[2] - a[2];
   const len2 = abx * abx + aby * aby + abz * abz;
-  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, (apx * abx + apy * aby + apz * abz) / len2));
-  const dx = apx - abx * t, dy = apy - aby * t, dz = apz - abz * t;
+  const t =
+    len2 === 0
+      ? 0
+      : Math.max(0, Math.min(1, (apx * abx + apy * aby + apz * abz) / len2));
+  const dx = apx - abx * t,
+    dy = apy - aby * t,
+    dz = apz - abz * t;
   return Math.hypot(dx, dy, dz);
 }
 
@@ -230,7 +256,13 @@ export function measureArm(samples: ArmSample[]): ArmMetrics {
       return Math.max(...vs) - Math.min(...vs);
     };
     const span = { x: axis(0), y: axis(1), z: axis(2) };
-    const ranked = ([['horizontal', span.x], ['vertical', span.y], ['depth', span.z]] as const)
+    const ranked = (
+      [
+        ['horizontal', span.x],
+        ['vertical', span.y],
+        ['depth', span.z],
+      ] as const
+    )
       .slice()
       .sort((a, b) => b[1] - a[1]);
     const swingAxis: ArmMetrics['swingAxis'] =
@@ -251,12 +283,16 @@ export function measureArm(samples: ArmSample[]): ArmMetrics {
     armSwing,
     forearmFront: mean(samples.map((s) => s.hand[2] - s.elbow[2])),
     handHeight: mean(samples.map((s) => s.hand[1] - s.shoulder[1])),
-    clearance: Math.min(...samples.map((s) => pointSegDist(s.hand, s.shoulder, s.elbow))),
+    clearance: Math.min(
+      ...samples.map((s) => pointSegDist(s.hand, s.shoulder, s.elbow)),
+    ),
     tipSpan: tip.span,
     tipSwingAxis: tip.swingAxis,
     // 하완 중점의 몸 중심축 수평거리 (Hips 로컬이라 축이 곧 x=z=0 수직선)
     torsoClearance: Math.min(
-      ...samples.map((s) => Math.hypot((s.hand[0] + s.elbow[0]) / 2, (s.hand[2] + s.elbow[2]) / 2)),
+      ...samples.map((s) =>
+        Math.hypot((s.hand[0] + s.elbow[0]) / 2, (s.hand[2] + s.elbow[2]) / 2),
+      ),
     ),
     palmOut: mean(samples.map((s) => palmNormal(s)[0])),
     palmFwd: mean(samples.map((s) => palmNormal(s)[1])),
@@ -271,8 +307,16 @@ export function measureArm(samples: ArmSample[]): ArmMetrics {
 /** 손바닥 법선 → [바깥향(측면), 정면향] 코사인. 손가락 본이 없으면 [0,0] */
 function palmNormal(s: ArmSample): [number, number] {
   if (!s.indexBase || !s.littleBase) return [0, 0];
-  const a = [s.indexBase[0] - s.hand[0], s.indexBase[1] - s.hand[1], s.indexBase[2] - s.hand[2]];
-  const b = [s.littleBase[0] - s.hand[0], s.littleBase[1] - s.hand[1], s.littleBase[2] - s.hand[2]];
+  const a = [
+    s.indexBase[0] - s.hand[0],
+    s.indexBase[1] - s.hand[1],
+    s.indexBase[2] - s.hand[2],
+  ];
+  const b = [
+    s.littleBase[0] - s.hand[0],
+    s.littleBase[1] - s.hand[1],
+    s.littleBase[2] - s.hand[2],
+  ];
   // 외적 = 손바닥 평면의 법선
   const n = [
     a[1] * b[2] - a[2] * b[1],
@@ -287,7 +331,10 @@ function palmNormal(s: ArmSample): [number, number] {
 }
 
 /** 지표 → 합격/불합격 판정. 실패한 체크의 이름이 곧 어느 실패 모드인지 알려준다. */
-export function evaluateArm(samples: ArmSample[], targets: ArmTargets = WAVE_TARGETS): ArmVerdict {
+export function evaluateArm(
+  samples: ArmSample[],
+  targets: ArmTargets = WAVE_TARGETS,
+): ArmVerdict {
   const m = measureArm(samples);
   const t = { ...WAVE_TARGETS, ...targets };
   // 흔들기 판정은 손끝 기준 (손목 관절은 손목 회전으로 안 움직임 — WAVE_TARGETS 주석 참조)
@@ -305,11 +352,36 @@ export function evaluateArm(samples: ArmSample[], targets: ArmTargets = WAVE_TAR
       value: m.tipSwingAxis,
       want: t.swingAxis,
     },
-    { name: '이동폭', pass: majorSpan >= t.minSpan, value: +majorSpan.toFixed(4), want: `≥${t.minSpan}` },
-    { name: '상완 정지도', pass: m.armSwing <= t.maxArmSwing, value: +m.armSwing.toFixed(4), want: `≤${t.maxArmSwing} rad` },
-    { name: '하완 전방', pass: m.forearmFront >= t.minForearmFront, value: +m.forearmFront.toFixed(4), want: `≥${t.minForearmFront}` },
-    { name: '손 높이', pass: m.handHeight >= t.minHandHeight, value: +m.handHeight.toFixed(4), want: `≥${t.minHandHeight}` },
-    { name: '상완 이격', pass: m.clearance >= t.minClearance, value: +m.clearance.toFixed(4), want: `≥${t.minClearance}` },
+    {
+      name: '이동폭',
+      pass: majorSpan >= t.minSpan,
+      value: +majorSpan.toFixed(4),
+      want: `≥${t.minSpan}`,
+    },
+    {
+      name: '상완 정지도',
+      pass: m.armSwing <= t.maxArmSwing,
+      value: +m.armSwing.toFixed(4),
+      want: `≤${t.maxArmSwing} rad`,
+    },
+    {
+      name: '하완 전방',
+      pass: m.forearmFront >= t.minForearmFront,
+      value: +m.forearmFront.toFixed(4),
+      want: `≥${t.minForearmFront}`,
+    },
+    {
+      name: '손 높이',
+      pass: m.handHeight >= t.minHandHeight,
+      value: +m.handHeight.toFixed(4),
+      want: `≥${t.minHandHeight}`,
+    },
+    {
+      name: '상완 이격',
+      pass: m.clearance >= t.minClearance,
+      value: +m.clearance.toFixed(4),
+      want: `≥${t.minClearance}`,
+    },
   ];
 
   return { ...m, checks, pass: checks.every((c) => c.pass) };

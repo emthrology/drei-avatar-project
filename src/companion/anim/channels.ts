@@ -267,7 +267,10 @@ export class Channels {
   }
 
   // 길이축 등록: 자식의 로컬 위치가 곧 이 뼈가 뻗은 방향. 길이 0(겹친 뼈)이면 롤 불가 → 미등록.
-  private setAxis(bone: THREE.Object3D | null, child: THREE.Object3D | null): void {
+  private setAxis(
+    bone: THREE.Object3D | null,
+    child: THREE.Object3D | null,
+  ): void {
     if (!bone || !child) return;
     const axis = child.position.clone();
     if (axis.lengthSq() < 1e-12) return;
@@ -341,7 +344,9 @@ export class Channels {
     if (this.chest && this.chest !== this.spine) {
       // x=호흡+제스처린(앞뒤), y=제스처턴, z=제스처린(좌우) — 한 본에 합성
       this._euler.set(
-        v('chest.inhale') * CHEST_INHALE_SCALE + v('chest.leanX') + d('chest.leanX'),
+        v('chest.inhale') * CHEST_INHALE_SCALE +
+          v('chest.leanX') +
+          d('chest.leanX'),
         v('chest.turnY'),
         v('chest.leanZ') + d('chest.leanZ'),
       );

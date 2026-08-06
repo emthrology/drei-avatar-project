@@ -5,20 +5,20 @@ VRoid VRM 아바타 에디터 + VTuber 스타일 컴패니언 오버레이.
 
 ## 모드
 
-| 모드 | 설명 |
-|------|------|
-| **에디터** | VRM 로딩, MToon 파라미터 조정, 파츠 show/hide |
+| 모드         | 설명                                                               |
+| ------------ | ------------------------------------------------------------------ |
+| **에디터**   | VRM 로딩, MToon 파라미터 조정, 파츠 show/hide                      |
 | **컴패니언** | 게임 이벤트에 반응하는 오버레이. TTS 립싱크, 시선, 절차 애니메이션 |
 
 ## 기술 스택
 
-| 역할 | 도구 |
-|------|------|
-| VRM 로딩/셰이더 | `@pixiv/three-vrm` v3 |
-| 3D 렌더링 | `@react-three/fiber` v8 |
-| 헬퍼 | `@react-three/drei` v9 |
-| 상태 관리 | Zustand v5 |
-| UI | React + Vite + Tailwind |
+| 역할            | 도구                    |
+| --------------- | ----------------------- |
+| VRM 로딩/셰이더 | `@pixiv/three-vrm` v3   |
+| 3D 렌더링       | `@react-three/fiber` v8 |
+| 헬퍼            | `@react-three/drei` v9  |
+| 상태 관리       | Zustand v5              |
+| UI              | React + Vite + Tailwind |
 
 ## 시작하기
 
@@ -40,10 +40,12 @@ VITE_GOOGLE_TTS_API_KEY=your_key_here
 외부 게임에서 아래 이벤트를 dispatch하면 컴패니언이 반응합니다:
 
 ```ts
-window.dispatchEvent(new CustomEvent('game:event', {
-  detail: { type: 'level_clear' }
-  // type: 'player_die' | 'level_clear' | 'near_miss' | 'jump' | 'start'
-}))
+window.dispatchEvent(
+  new CustomEvent('game:event', {
+    detail: { type: 'level_clear' },
+    // type: 'player_die' | 'level_clear' | 'near_miss' | 'jump' | 'start'
+  }),
+);
 ```
 
 ## 아바타 포맷
