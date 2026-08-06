@@ -181,7 +181,8 @@ async function acquireBrowser() {
         /* 아직 안 뜸 */
       }
     }
-    throw new Error(`프로브 브라우저 기동 실패 (포트 ${DEBUG_PORT})`)
+    // cause 로 원인을 붙인다 — 기동 실패 원인이 "붙기 실패"인지 "실행 실패"인지 구분돼야 한다
+    throw new Error(`프로브 브라우저 기동 실패 (포트 ${DEBUG_PORT})`, { cause: e })
   }
 }
 
