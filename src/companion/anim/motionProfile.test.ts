@@ -18,8 +18,11 @@ import { formatProfile, profileIdle, STILL_THRESHOLD } from './motionProfile';
 import { DRIFT, DRIFT_AMP } from './channels';
 
 // ── 예산 (조이기만 할 것) ─────────────────────────────────────
-const BURST_TOP5 = 0.45; // 총 회전량 중 상위 5% 프레임 비중 상한 (1단계 후 0.350)
-const PEAK_SPEED = 120; // 구동 본 최대 각속도 상한 deg/s (1단계 후 100.3)
+const BURST_TOP5 = 0.35; // 총 회전량 중 상위 5% 프레임 비중 상한 (5단계 후 0.305)
+// 구동 본 최대 각속도 상한 deg/s (5단계 후 114.1 — 여유 5%).
+// ⚠️ 이 예산이 dt 축소의 천장이다. 최대 속도는 대략 1/dt 로 오르므로 지금보다 dt 를 더 줄이면
+// 곧 걸린다. 걸리면 완화가 아니라 '왜 더 빨라야 하는가'를 먼저 답할 것.
+const PEAK_SPEED = 120;
 const DRIVEN_BONES = 7; // 구동 본 수 하한 (기준선 7 — 3단계에서 늘어난다)
 
 // 구동 본 최장 정지 상한 초 (1단계 후 22.35).
@@ -32,7 +35,9 @@ const DRIVEN_BONES = 7; // 구동 본 수 하한 (기준선 7 — 3단계에서 
 //
 // 진짜 원인은 `armRelaxed`(차렷) 의 목표 범위가 `elbowR.z ∈ [-0.02, 0.08]` 로 인지 문턱 아래라는
 // 것 → **2단계에서 진폭을 손봐 수치를 실제로 낮춘다.** 최종 목표는 4단계의 1.0s 로 불변.
-const WORST_STILL = 23;
+//
+// 5단계(delay 축소)로 22.35 → 14.58 이 됐다. delay 는 곧 정지 시간이므로 직접 줄어든다.
+const WORST_STILL = 16;
 
 describe('절차 모션 프로파일', () => {
   const profile = profileIdle();

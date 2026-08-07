@@ -26,7 +26,7 @@ const head: AnimTemplate = {
         name: 'head',
         p: 0.7,
         delay: [0, 400],
-        dt: [[1000, 4000]],
+        dt: [[800, 2600]],
         vs: {
           'head.rotateX': [[-0.03, 0.05]],
           'head.rotateY': [[-0.09, 0.09]],
@@ -36,7 +36,7 @@ const head: AnimTemplate = {
       // 가끔 크게 둘러보기 — 머리를 확 돌렸다 hold-last로 잠시 유지
       {
         name: 'head',
-        delay: [400, 1200],
+        delay: [300, 800],
         dt: [[700, 1500]],
         vs: {
           'head.rotateY': [[-0.22, 0.22]],
@@ -64,16 +64,16 @@ export const IDLE_SPINE_POSES: AnimTemplate[] = [
     name: 'pose',
     label: '둘러보기L',
     p: 0.3,
-    delay: [1500, 3500],
-    dt: [[1600, 2400]],
+    delay: [1000, 2300],
+    dt: [[1300, 2000]],
     vs: { 'spine.x': [0.02], 'spine.y': [0.35], 'spine.z': [-0.05] },
   },
   {
     name: 'pose',
     label: '둘러보기R',
     p: 0.3,
-    delay: [1500, 3500],
-    dt: [[1600, 2400]],
+    delay: [1000, 2300],
+    dt: [[1300, 2000]],
     vs: { 'spine.x': [0.02], 'spine.y': [-0.35], 'spine.z': [0.05] },
   },
 ];
@@ -87,37 +87,37 @@ const pose: AnimTemplate = {
   alt: [
     {
       name: 'pose',
-      delay: [2000, 5000],
+      delay: [1300, 3200],
       dt: [[1400, 2400]],
       vs: { 'spine.x': [0.0], 'spine.y': [0.06], 'spine.z': [0.05] },
     },
     {
       name: 'pose',
-      delay: [2000, 5000],
+      delay: [1300, 3200],
       dt: [[1400, 2400]],
       vs: { 'spine.x': [0.03], 'spine.y': [-0.08], 'spine.z': [-0.06] },
     },
     {
       name: 'pose',
-      delay: [2000, 5000],
+      delay: [1300, 3200],
       dt: [[1400, 2400]],
       vs: { 'spine.x': [-0.02], 'spine.y': [0.1], 'spine.z': [0.04] },
     },
     {
       name: 'pose',
-      delay: [2000, 4500],
+      delay: [1300, 2900],
       dt: [[1200, 2200]],
       vs: { 'spine.x': [0.05], 'spine.y': [0.0], 'spine.z': [-0.03] },
     },
     {
       name: 'pose',
-      delay: [1500, 4000],
+      delay: [1000, 2600],
       dt: [[1000, 1800]],
       vs: { 'spine.x': [0.0], 'spine.y': [0.13], 'spine.z': [-0.04] },
     },
     {
       name: 'pose',
-      delay: [1500, 4000],
+      delay: [1000, 2600],
       dt: [[1000, 1800]],
       vs: { 'spine.x': [0.01], 'spine.y': [-0.12], 'spine.z': [0.06] },
     },
@@ -160,7 +160,7 @@ export const IDLE_ARM_POSES: AnimTemplate[] = [
     label: '허리짚기L',
     p: 0.05, // 빈도 낮춤 (가끔만)
     ease: 2.8,
-    delay: [2500, 5500],
+    delay: [1700, 3600],
     dt: [[800, 1300]],
     vs: {
       'armL.z': [-1.02],
@@ -176,7 +176,7 @@ export const IDLE_ARM_POSES: AnimTemplate[] = [
     label: '허리짚기R',
     p: 0.05, // 빈도 낮춤 (가끔만)
     ease: 2.8,
-    delay: [2500, 5500],
+    delay: [1700, 3600],
     dt: [[800, 1300]],
     vs: {
       'armR.z': [1.02],
@@ -192,7 +192,7 @@ export const IDLE_ARM_POSES: AnimTemplate[] = [
     label: '뒷짐',
     p: 0.15,
     ease: 2.8,
-    delay: [2800, 6000],
+    delay: [1900, 3900],
     dt: [[900, 1400]],
     vs: {
       'armL.x': [0.26],
@@ -212,7 +212,7 @@ export const IDLE_ARM_POSES: AnimTemplate[] = [
     label: '앞으로모으기',
     // p 생략 → 나머지 확률 흡수 (pickAlt 마지막)
     ease: 2.8,
-    delay: [3000, 6500],
+    delay: [2000, 4200],
     dt: [[1000, 1600]],
     vs: {
       'armL.z': [-1.2],
@@ -239,7 +239,7 @@ const armRelaxed: AnimTemplate = {
   // micro-drift가 차렷도 미세 흔들어 정지 아님.
   p: 0.55,
   ease: 3,
-  delay: [1800, 4000],
+  delay: [1200, 2600],
   dt: [[1400, 2200]],
   vs: {
     'armL.z': [[-1.33, -1.27]],
