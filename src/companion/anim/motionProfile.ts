@@ -53,6 +53,40 @@ export interface ProfileOptions {
   seed?: number;
 }
 
+/** 예산 판정에 쓰는 시드 집합. 단일 시드는 **비교 불가**하다 — 아래 profileMean 주석 참조 */
+export const BUDGET_SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
+
+// 여러 시드의 평균 프로파일.
+//
+// ⚠️ **단일 시드로 변경 전후를 비교하면 안 된다.** 스케줄러는 전역 `Math.random` 을 쓰고,
+// `gaussianRandom` 은 `samples` 만큼 호출을 소비한다 → 난수 **소비량**이 달라지는 변경
+// (samples 조정·클립 추가·alt 분기 변경 등)은 시드가 같아도 그 뒤 스트림 전체를 어긋나게 만든다.
+// 그러면 관측된 차이가 변경의 효과인지 시드 노이즈인지 구분되지 않는다(실측: 최장 정지가
+// 단일 시드 14.58s vs 8시드 평균 12.87s). 예산 단정문은 반드시 이 평균으로 판정한다.
+export function profileMean(
+  seeds: number[] = BUDGET_SEEDS,
+  opts: Omit<ProfileOptions, 'seed'> = {},
+): MotionProfile {
+  const runs = seeds.map((seed) => profileIdle({ ...opts, seed }));
+  const avg = (pick: (p: MotionProfile) => number) =>
+    runs.reduce((a, p) => a + pick(p), 0) / runs.length;
+  const bones = runs[0].bones.map((_, i) => ({
+    bone: runs[0].bones[i].bone,
+    stillPct: avg((p) => p.bones[i].stillPct),
+    meanSpeed: avg((p) => p.bones[i].meanSpeed),
+    maxSpeed: avg((p) => p.bones[i].maxSpeed),
+    longestStill: avg((p) => p.bones[i].longestStill),
+  }));
+  return {
+    bones,
+    drivenBones: Math.round(avg((p) => p.drivenBones)),
+    burstTop5: avg((p) => p.burstTop5),
+    burstTop10: avg((p) => p.burstTop10),
+    worstStill: avg((p) => p.worstStill),
+    peakSpeed: avg((p) => p.peakSpeed),
+  };
+}
+
 // 결정적 난수 (mulberry32). 스케줄러는 gaussian/alt 분기에 전역 Math.random을 쓰므로
 // 프로파일 구동 동안만 갈아끼운다 — 호출부가 vi.spyOn 을 안 해도 항상 같은 수치가 나오게.
 function mulberry32(seed: number): () => number {
