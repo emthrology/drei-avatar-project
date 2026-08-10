@@ -80,28 +80,328 @@ export const BASELINE: Record<string, number> = {
 };
 
 // chest.inhale(0~1) → 가슴 본 X회전 스케일 (기존 useIdleAnimation 0.015 진폭 보존)
-const CHEST_INHALE_SCALE = 0.03;
+export const CHEST_INHALE_SCALE = 0.03;
 
-// idle micro-drift (2번): hold(제스처 정지·포즈 유지) 구간에도 팔·몸통이 미세하게 살아있도록
-// 최종 회전에 초저주파 sine을 상시 가산. apply-레이어라 스케줄러 채널 단일 소유와 무관하고,
-// state 맵은 비훼손(tick 반환=scheduler.live 참조 → mutate 금지, euler 로컬에만 더함).
-// 활성 모션 땐 진폭에 묻히고 hold 때만 보임 → hold 감지 불필요. 머리(이미 미동)·얼굴(표정 동기)·
-// 호흡(chest.inhale, 이미 진동)은 제외. 서로 안 맞아떨어지는 주기(≈5~12s)로 반복감 제거.
-// DRIFT_AMP=0이면 완전 무영향(비퇴행). 진폭은 육안 튜닝값.
-const DRIFT_AMP = 1; // 전역 배율 (0=off)
-const DRIFT: Record<string, [number, number, number]> = {
-  // 채널: [주파수 rad/s, 위상, 진폭 rad(≈0.3~0.5°)]
-  'spine.y': [0.53, 0.0, 0.008],
-  'spine.z': [0.61, 2.1, 0.007],
-  'chest.leanX': [0.71, 1.0, 0.005],
-  'chest.leanZ': [0.83, 3.0, 0.005],
-  'armL.z': [0.67, 0.4, 0.008],
-  'armR.z': [0.73, 2.9, 0.008],
-  'armL.x': [0.97, 0.5, 0.006],
-  'armR.x': [1.03, 3.6, 0.006],
-  'elbowL.z': [1.09, 1.2, 0.005],
-  'elbowR.z': [1.19, 4.0, 0.005],
+// ── 자세 동요 (postural sway) — 리뉴얼 4단계에서 micro-drift 를 승격한 것 ──────────
+//
+// 무엇: 본별 최종 회전에 상시 가산하는 저주파 진동. **키는 채널이 아니라 본의 축**(`<본>.<축>`)
+// 이고, boneEulers 가 파생까지 끝낸 뒤 마지막에 더한다 → 어느 클립이 돌든 무관하게 항상 산다.
+// apply-레이어라 스케줄러의 채널 단일 소유·hold-last 계약과 무관하고, state 맵도 비훼손이다
+// (tick 반환 = scheduler.live 참조 → mutate 금지. euler 로컬에만 더한다).
+//
+// 왜 이 형태인가 (4단계 = 정적 제거):
+// - 원래 목적은 hold 구간의 '얼어붙음' 완화였는데, 속도가 인지 문턱(0.5°/s)의 절반이라 **못 가렸다.**
+//   루프가 `delay 대기 → 램프 → 대기`라 채널이 구조적으로 수 초씩 상수가 되는 게 근본 원인.
+// - ⚠️ **sine 하나로는 문턱을 못 넘긴다** — 속도 = 진폭×각주파수×|cos| 라 반주기마다 0을 지난다.
+//   진폭을 키워도 정지 구간이 짧아질 뿐 사라지지 않는다(그리고 커지면 '물 위에 뜬' 느낌이 난다).
+//   → **축마다 서로 안 맞아떨어지는 4성분을 합성**한다. 속도 0 지점이 겹칠 일이 드물어 합이
+//   문턱 위에 머물고, 축이 2개 이상인 본은 축끼리 또 직교 합성돼 더 안정적이다.
+// - **성분 수보다 축별 속도 크기가 지배적이다**(실측: 성분을 2→4로 늘리면서 진폭을 1/√f 로
+//   깔았더니 최장 정지가 3.75→5.97s 로 오히려 나빠졌다). 그래서 진폭을 `a ∝ 1/f` 로 배분해
+//   **성분마다 속도 기여를 균등**하게 만들고, 축별 최대 속도를 문턱의 2.4~3배로 잡는다.
+// - ⚠️ **속도를 얻으려고 주파수만 올리지 않는다.** 진폭 0.1° 짜리 빠른 성분을 넣으면 지표는
+//   통과하지만 눈에는 아무것도 안 보인다 = 측정기를 속이는 것(문턱 0.5°/s 는 애초에 **인지**
+//   기준이다). 대역을 0.5~2.6 rad/s(주기 2.4~12.6s)로 묶어 두는 이유.
+//
+// DRIFT_AMP=0 이면 완전 무영향(비퇴행) — 부유감이 나면 여기부터 0으로 내려 원인을 가른다.
+// 얼굴(표정 동기)·손목(상완 동요가 FK 로 전달)·chest.inhale(이미 진동)은 대상 아님.
+export const DRIFT_AMP = 1; // 전역 배율 (0=off)
+
+/** 성분 [주파수 rad/s, 위상, 진폭 rad] */
+export type DriftComp = [number, number, number];
+
+export const DRIFT: Record<string, DriftComp[]> = {
+  // 축당 4성분(느림→빠름), 진폭 `a ∝ 1/f` 로 속도 기여 균등. 축별 최대 속도 1.2~1.5°/s
+  // (문턱의 2.4~3배), **축당 총 진폭 0.95~1.41°** — 자세 동요로 보일 크기이자, 이보다 키우면
+  // 부유감이 나기 시작하는 선. 눈으로 부유감이 나면 진폭부터 내린다(속도가 아니라).
+  // 주파수는 축마다 전부 다르게 흩어 놨다 — 같은 주파수를 공유하면 위상이 달라도 상대
+  // 위상이 고정돼 온몸이 한 덩어리로 규칙적으로 흔들린다(가장 티 나는 실패 모드).
+  // 값은 생성물이라 손으로 미세조정하기보다 그룹 목표 속도/진폭을 바꿔 다시 까는 편이 낫다.
+  'head.x': [
+    [0.6, 3.7, 0.0087],
+    [1.06, 6.1, 0.0049],
+    [1.6, 0.0, 0.0033],
+    [2.17, 0.7, 0.0024],
+  ],
+  'head.y': [
+    [0.75, 5.3, 0.007],
+    [1.29, 3.1, 0.0041],
+    [1.69, 1.8, 0.0031],
+    [2.31, 5.8, 0.0023],
+  ],
+  'head.z': [
+    [0.57, 4.9, 0.0092],
+    [1.14, 6.0, 0.0046],
+    [1.76, 1.4, 0.003],
+    [2.31, 1.7, 0.0023],
+  ],
+  'neck.x': [
+    [0.73, 6.2, 0.0078],
+    [1.31, 0.3, 0.0043],
+    [1.7, 0.8, 0.0033],
+    [2.37, 6.1, 0.0024],
+  ],
+  'neck.y': [
+    [0.62, 5.9, 0.0091],
+    [1.23, 1.9, 0.0046],
+    [1.63, 1.9, 0.0035],
+    [2.35, 3.0, 0.0024],
+  ],
+  'neck.z': [
+    [0.51, 2.0, 0.0111],
+    [1.18, 1.5, 0.0048],
+    [1.75, 1.6, 0.0032],
+    [2.36, 1.1, 0.0024],
+  ],
+  'spine.x': [
+    [0.72, 3.4, 0.0091],
+    [1.17, 0.7, 0.0056],
+    [1.73, 4.2, 0.0038],
+    [2.21, 4.1, 0.003],
+  ],
+  'spine.y': [
+    [0.59, 4.7, 0.0111],
+    [1.32, 6.1, 0.005],
+    [1.85, 1.5, 0.0035],
+    [2.27, 1.2, 0.0029],
+  ],
+  'spine.z': [
+    [0.74, 2.6, 0.0088],
+    [1.25, 2.2, 0.0052],
+    [1.87, 2.8, 0.0035],
+    [2.28, 1.0, 0.0029],
+  ],
+  'upperChest.x': [
+    [0.8, 5.6, 0.0076],
+    [1.09, 2.7, 0.0056],
+    [1.66, 1.7, 0.0037],
+    [2.28, 1.9, 0.0027],
+  ],
+  'upperChest.y': [
+    [0.54, 5.5, 0.0113],
+    [1.35, 2.9, 0.0045],
+    [1.68, 3.0, 0.0036],
+    [2.28, 2.8, 0.0027],
+  ],
+  'upperChest.z': [
+    [0.59, 0.4, 0.0104],
+    [1.35, 3.1, 0.0045],
+    [1.83, 1.4, 0.0033],
+    [2.22, 4.9, 0.0028],
+  ],
+  'chest.x': [
+    [0.5, 4.1, 0.0118],
+    [1.18, 2.4, 0.005],
+    [1.79, 1.4, 0.0033],
+    [2.17, 1.5, 0.0027],
+  ],
+  'chest.z': [
+    [0.7, 0.9, 0.0084],
+    [1.19, 2.0, 0.0049],
+    [1.85, 3.1, 0.0032],
+    [2.37, 3.7, 0.0025],
+  ],
+  'shoulderL.x': [
+    [0.5, 2.5, 0.0131],
+    [1.27, 4.1, 0.0052],
+    [1.9, 5.3, 0.0034],
+    [2.29, 0.0, 0.0029],
+  ],
+  'shoulderL.z': [
+    [0.62, 0.6, 0.0106],
+    [1.16, 1.9, 0.0056],
+    [1.81, 2.3, 0.0036],
+    [2.38, 3.3, 0.0027],
+  ],
+  'shoulderR.x': [
+    [0.68, 3.4, 0.0096],
+    [1.09, 0.9, 0.006],
+    [1.8, 3.8, 0.0036],
+    [2.19, 5.9, 0.003],
+  ],
+  'shoulderR.z': [
+    [0.6, 4.8, 0.0109],
+    [1.26, 5.8, 0.0052],
+    [1.77, 3.9, 0.0037],
+    [2.26, 1.2, 0.0029],
+  ],
+  'armL.x': [
+    [0.8, 5.8, 0.0082],
+    [1.35, 3.7, 0.0048],
+    [1.82, 4.0, 0.0036],
+    [2.4, 3.2, 0.0027],
+  ],
+  'armL.z': [
+    [0.71, 5.3, 0.0092],
+    [1.19, 2.8, 0.0055],
+    [1.77, 5.8, 0.0037],
+    [2.23, 1.3, 0.0029],
+  ],
+  'armR.x': [
+    [0.56, 0.2, 0.0117],
+    [1.3, 2.0, 0.005],
+    [1.7, 3.2, 0.0038],
+    [2.21, 4.9, 0.003],
+  ],
+  'armR.z': [
+    [0.73, 1.1, 0.009],
+    [1.16, 3.2, 0.0056],
+    [1.8, 2.6, 0.0036],
+    [2.27, 3.8, 0.0029],
+  ],
+  'elbowL.x': [
+    [0.6, 1.0, 0.0105],
+    [1.29, 1.0, 0.0049],
+    [1.87, 1.7, 0.0034],
+    [2.23, 1.2, 0.0028],
+  ],
+  'elbowL.z': [
+    [0.75, 5.0, 0.0084],
+    [1.22, 4.3, 0.0052],
+    [1.8, 2.3, 0.0035],
+    [2.33, 6.1, 0.0027],
+  ],
+  'elbowR.x': [
+    [0.57, 5.5, 0.0111],
+    [1.21, 5.6, 0.0052],
+    [1.71, 5.7, 0.0037],
+    [2.45, 5.4, 0.0026],
+  ],
+  'elbowR.z': [
+    [0.66, 2.9, 0.0096],
+    [1.12, 3.2, 0.0056],
+    [1.9, 2.3, 0.0033],
+    [2.19, 4.1, 0.0029],
+  ],
 };
+
+// 본 축 key 의 t초 시점 drift. apply()와 모션 프로파일러(motionProfile.ts)가 **같은 함수**를
+// 쓴다 — 프로파일러가 이 표를 복사해 가면 항목이 늘 때 사본만 조용히 낡는다.
+export function driftAt(key: string, t: number): number {
+  const comps = DRIFT[key];
+  if (!comps) return 0;
+  let sum = 0;
+  for (const [freq, phase, amp] of comps)
+    sum += Math.sin(t * freq + phase) * amp;
+  return sum * DRIFT_AMP;
+}
+
+/** 본 축 key 의 이론상 최대 각속도 (deg/s) — 성분 속도의 합. 예산 테스트가 쓴다 */
+export function driftPeakSpeed(key: string): number {
+  const comps = DRIFT[key];
+  if (!comps) return 0;
+  const rad = comps.reduce((a, [freq, , amp]) => a + amp * freq, 0);
+  return rad * DRIFT_AMP * (180 / Math.PI);
+}
+
+// ── 본 파생 (리뉴얼 3단계 — 본 커버리지) ──────────────────────────────────────
+// 개별 클립을 다시 저작하지 않고 **기존 채널 값에서 새 본 회전을 만들어** 전 동작에 소급한다
+// (모션 레이어 = 데이터 무변경 소급 적용). 원칙은 **총 회전량 유지**: 새 본이 가져간 몫만큼
+// 원래 본에서 뺀다 → 실루엣(손 위치·시선 방향)은 그대로고, 한 관절이 담당하던 회전이 여러
+// 관절로 **분절**된다. 머리가 목 없이 두개골 바닥에서 통째로 도는 게 로봇 같아 보이던 지점.
+// 계수 0 = 파생 없음 → 기존 출력 바이트 동일(비퇴행). useAnimator 만 DERIVE_DEFAULT 로 켠다.
+export interface DeriveConfig {
+  /** head 총 회전 중 Neck 이 가져가는 몫 */
+  neck: number;
+  /** 상완의 baseline(차렷 ±1.3) 대비 **편차** 중 Shoulder 가 가져가는 몫 */
+  shoulder: number;
+  /** spine 회전 중 UpperChest 가 가져가는 몫 */
+  upperChest: number;
+}
+export const DERIVE_OFF: DeriveConfig = { neck: 0, shoulder: 0, upperChest: 0 };
+// 출발점은 VRMA_03(실측상 가장 정적인 클립 = idle 에 가장 가까움)의 관절 간 각속도 비율.
+// docs/motion-renewal-plan.md 3단계 표: head:neck = 0.66:0.34 · shoulder/upperArm = 0.26.
+// 비율이 클립마다 다르므로(VRMA_05 는 목 0.49:0.51) 단일 정답 계수는 없다 — 프로파일로 조정한다.
+// - neck 0.35     : VRMA_03 실측 그대로
+// - shoulder 0.33 : VRMA_03 을 총량 대비로 환산하면 0.26/1.26 ≈ 0.21 인데, 그 값이면 파생된
+//                   어깨가 시간의 80%를 인지 문턱(0.5°/s) 아래에 머문다 = 본만 늘고 안 움직인다.
+//                   해부학의 견갑상완 리듬(scapulohumeral rhythm) 2:1 = 견갑골이 총 거상의 1/3 을
+//                   담당한다는 상한을 택했다. 어깨 최장 정지 16.1→12.1s, 상완은 무변화(10.3s).
+// - upperChest 0.25: VRMA_03 에선 UpperChest 가 아예 안 쓰여(0) 실측 근거가 없다 → 보수적으로.
+export const DERIVE_DEFAULT: DeriveConfig = {
+  neck: 0.35,
+  shoulder: 0.33,
+  upperChest: 0.25,
+};
+
+/** 본 키 → 로컬 오일러 [x,y,z]. 키는 채널 접두어와 같은 이름을 쓴다(head/spine/armL…). */
+export type BoneEulers = Record<string, [number, number, number]>;
+
+// 채널 상태맵 → 본별 최종 오일러 (드리프트·파생 포함). apply() 와 모션 프로파일러
+// (motionProfile.ts)가 **같은 함수**를 쓴다 — 프로파일러가 이 계산을 복사해 가면 채널·파생이
+// 늘 때 사본만 조용히 낡는다(driftAt 과 같은 이유).
+// t=누적 시간(초, micro-drift 위상용). cfg 는 호출부가 **모델에 실제로 있는 본만** 켜서 넘긴다
+// (없는 본에 몫을 떼주면 그만큼 회전이 증발한다 → Channels 생성자가 결측 본 계수를 0으로 낮춘다).
+export function boneEulers(
+  state: Record<string, number>,
+  cfg: DeriveConfig = DERIVE_OFF,
+  t = 0,
+): BoneEulers {
+  const v = (k: string) => state[k] ?? BASELINE[k] ?? 0;
+  const o: BoneEulers = {};
+  // 자세 동요를 **본 단위로, 파생이 끝난 뒤** 가산한다. 채널에 더하면 분배 계수만큼 쪼개져
+  // (예: spine drift 의 25%가 UpperChest 로) 본별 신호의 독립성이 사라진다.
+  const set = (bone: string, x: number, y: number, z: number) => {
+    o[bone] = [
+      x + driftAt(`${bone}.x`, t),
+      y + driftAt(`${bone}.y`, t),
+      z + driftAt(`${bone}.z`, t),
+    ];
+  };
+
+  // 머리 — idle 미동(rotate) + 제스처(g) 합성. base+delta
+  const hx = v('head.rotateX') + v('head.gx');
+  const hy = v('head.rotateY') + v('head.gy');
+  const hz = v('head.rotateZ') + v('head.gz');
+  if (cfg.neck > 0) {
+    const k = cfg.neck;
+    set('neck', hx * k, hy * k, hz * k);
+    set('head', hx * (1 - k), hy * (1 - k), hz * (1 - k));
+  } else {
+    set('head', hx, hy, hz);
+  }
+
+  // 몸통 포즈 (Spine 절대 회전 — 상반신 체중이동)
+  const px = v('spine.x');
+  const py = v('spine.y');
+  const pz = v('spine.z');
+  if (cfg.upperChest > 0) {
+    const k = cfg.upperChest;
+    set('upperChest', px * k, py * k, pz * k);
+    set('spine', px * (1 - k), py * (1 - k), pz * (1 - k));
+  } else {
+    set('spine', px, py, pz);
+  }
+
+  // 가슴 — x=호흡+제스처린(앞뒤), y=제스처턴, z=제스처린(좌우)을 한 본에 합성
+  set(
+    'chest',
+    v('chest.inhale') * CHEST_INHALE_SCALE + v('chest.leanX'),
+    v('chest.turnY'),
+    v('chest.leanZ'),
+  );
+
+  // 팔 — 어깨는 baseline(차렷) 대비 **편차**만 나눠 진다. 정적 자세(팔 내림)에서 어깨가
+  // 딸려 올라가면 안 되므로 baseline 자체는 상완에 남긴다.
+  for (const s of ['L', 'R'] as const) {
+    const ax = v(`arm${s}.x`);
+    const ay = v(`arm${s}.y`);
+    const az = v(`arm${s}.z`);
+    if (cfg.shoulder > 0) {
+      const k = cfg.shoulder;
+      const dz = az - BASELINE[`arm${s}.z`];
+      set(`shoulder${s}`, ax * k, 0, dz * k);
+      set(`arm${s}`, ax * (1 - k), ay, BASELINE[`arm${s}.z`] + dz * (1 - k));
+    } else {
+      set(`arm${s}`, ax, ay, az);
+    }
+    set(`elbow${s}`, v(`elbow${s}.x`), v(`elbow${s}.y`), v(`elbow${s}.z`));
+    // 손목 — normalized 리그의 rest 는 identity 라 전 채널 0이면 기록해도 무변화(비퇴행).
+    // drift 대상 아님(손목 미세진동은 상완 drift 가 FK 로 이미 전달).
+    o[`hand${s}`] = [v(`hand${s}.x`), v(`hand${s}.y`), v(`hand${s}.z`)];
+  }
+  return o;
+}
 
 // happy 눈감김 목표 비율(완전감김 Fcl_EYE_Close 대비). male 실측 ~0.64 → boost 0(비퇴행)
 const HAPPY_EYE_TARGET = 0.62;
@@ -163,6 +463,10 @@ export class Channels {
   private elbowR: THREE.Object3D | null;
   private handL: THREE.Object3D | null;
   private handR: THREE.Object3D | null;
+  // 본 키(boneEulers 반환 키) → 노드. 파생 본이 늘어도 apply() 는 이 표만 돈다.
+  private nodes: [string, THREE.Object3D][] = [];
+  // 이 모델에 실제로 존재하는 본만 켠 파생 계수 (결측 본에 몫을 떼면 회전이 증발한다)
+  private cfg: DeriveConfig;
   private _euler = new THREE.Euler();
   private _q = new THREE.Quaternion();
   // 각 뼈의 로컬 길이축 (자식 뼈의 로컬 위치 방향) — 롤 회전축. 리그 비의존으로 실측한다.
@@ -180,7 +484,10 @@ export class Channels {
   private happyEyeSig = ''; // 얼굴 구성·가시성 시그니처 (변화 시에만 boost 재측정)
   private happyEyeActive = false; // happy 보강 기록 중 여부 (비활성 전환 시 1회 클리어용)
 
-  constructor(private vrm: VRM) {
+  constructor(
+    private vrm: VRM,
+    derive: DeriveConfig = DERIVE_OFF,
+  ) {
     const h = vrm.humanoid;
     this.head = h.getNormalizedBoneNode(VRMHumanBoneName.Head);
     // 호흡(Chest)과 포즈(Spine)는 다른 본 → 충돌 없음. Chest 없으면 호흡이 Spine로 fallback
@@ -200,6 +507,38 @@ export class Channels {
     this.setAxis(this.elbowL, this.handL);
     this.setAxis(this.elbowR, this.handR);
     this.curlFingers();
+
+    // 파생 본 — 없는 모델(VRM 에서 Neck/UpperChest/Shoulder 는 선택 본)이면 그 계수만 0으로
+    // 낮춘다. 몫을 떼줄 곳이 없는데 원 본에서 빼면 그만큼 회전이 사라진다.
+    const neck = h.getNormalizedBoneNode(VRMHumanBoneName.Neck);
+    const upperChest = h.getNormalizedBoneNode(VRMHumanBoneName.UpperChest);
+    const shoulderL = h.getNormalizedBoneNode(VRMHumanBoneName.LeftShoulder);
+    const shoulderR = h.getNormalizedBoneNode(VRMHumanBoneName.RightShoulder);
+    this.cfg = {
+      neck: neck ? derive.neck : 0,
+      shoulder: shoulderL && shoulderR ? derive.shoulder : 0,
+      upperChest: upperChest ? derive.upperChest : 0,
+    };
+
+    // apply() 가 도는 본 표. 계수 0 인 파생 본은 **아예 넣지 않는다** — 기록조차 안 해야
+    // 기존 출력과 바이트 동일이고, VRMA 레이어의 「소유 판별」(useVrmaLayer.ts)도 안 바뀐다.
+    const pairs: [string, THREE.Object3D | null][] = [
+      ['head', this.head],
+      ['neck', this.cfg.neck > 0 ? neck : null],
+      ['spine', this.spine],
+      ['upperChest', this.cfg.upperChest > 0 ? upperChest : null],
+      // Chest 결측 시 spine 으로 fallback 하지만, 그 경우 spine 기록이 이기므로 제외한다
+      ['chest', this.chest !== this.spine ? this.chest : null],
+      ['shoulderL', this.cfg.shoulder > 0 ? shoulderL : null],
+      ['shoulderR', this.cfg.shoulder > 0 ? shoulderR : null],
+      ['armL', this.armL],
+      ['armR', this.armR],
+      ['elbowL', this.elbowL],
+      ['elbowR', this.elbowR],
+      ['handL', this.handL],
+      ['handR', this.handR],
+    ];
+    this.nodes = pairs.filter((p): p is [string, THREE.Object3D] => !!p[1]);
 
     // 존재하는 감정 preset만 수집 → apply에서 누락 모델 안전
     const em = vrm.expressionManager;
@@ -318,86 +657,20 @@ export class Channels {
   // 스케줄러 출력 상태맵을 VRM에 기록. t=누적 시간(초) — idle micro-drift 위상용(0=drift 없음).
   apply(state: Record<string, number>, t = 0): void {
     const v = (k: string) => state[k] ?? BASELINE[k] ?? 0;
-    // micro-drift: 채널별 초저주파 sine (state 비훼손 — euler 로컬에만 가산). DRIFT_AMP=0이면 0.
-    const d = (k: string) => {
-      const c = DRIFT[k];
-      return c ? Math.sin(t * c[0] + c[1]) * c[2] * DRIFT_AMP : 0;
-    };
 
-    if (this.head) {
-      // idle 미동(rotate) + 제스처(g) 합성 — base+delta (머리는 이미 미동 → drift 제외)
-      this._euler.set(
-        v('head.rotateX') + v('head.gx'),
-        v('head.rotateY') + v('head.gy'),
-        v('head.rotateZ') + v('head.gz'),
-      );
-      this.head.quaternion.setFromEuler(this._euler);
+    // 본 회전 = 채널 → 오일러 변환(드리프트·파생 포함)을 boneEulers 가 전담. 여기선 기록만 한다.
+    const eu = boneEulers(state, this.cfg, t);
+    for (const [key, node] of this.nodes) {
+      const e = eu[key];
+      if (!e) continue;
+      this._euler.set(e[0], e[1], e[2]);
+      node.quaternion.setFromEuler(this._euler);
     }
-    if (this.spine) {
-      this._euler.set(
-        v('spine.x'),
-        v('spine.y') + d('spine.y'),
-        v('spine.z') + d('spine.z'),
-      );
-      this.spine.quaternion.setFromEuler(this._euler);
-    }
-    if (this.chest && this.chest !== this.spine) {
-      // x=호흡+제스처린(앞뒤), y=제스처턴, z=제스처린(좌우) — 한 본에 합성
-      this._euler.set(
-        v('chest.inhale') * CHEST_INHALE_SCALE +
-          v('chest.leanX') +
-          d('chest.leanX'),
-        v('chest.turnY'),
-        v('chest.leanZ') + d('chest.leanZ'),
-      );
-      this.chest.quaternion.setFromEuler(this._euler);
-    }
-    if (this.armL) {
-      this._euler.set(
-        v('armL.x') + d('armL.x'),
-        v('armL.y'),
-        v('armL.z') + d('armL.z'),
-      );
-      this.armL.quaternion.setFromEuler(this._euler);
-      this.twist(this.armL, v('armL.twist'));
-    }
-    if (this.armR) {
-      this._euler.set(
-        v('armR.x') + d('armR.x'),
-        v('armR.y'),
-        v('armR.z') + d('armR.z'),
-      );
-      this.armR.quaternion.setFromEuler(this._euler);
-      this.twist(this.armR, v('armR.twist'));
-    }
-    if (this.elbowL) {
-      this._euler.set(
-        v('elbowL.x'),
-        v('elbowL.y'),
-        v('elbowL.z') + d('elbowL.z'),
-      );
-      this.elbowL.quaternion.setFromEuler(this._euler);
-      this.twist(this.elbowL, v('elbowL.twist'));
-    }
-    if (this.elbowR) {
-      this._euler.set(
-        v('elbowR.x'),
-        v('elbowR.y'),
-        v('elbowR.z') + d('elbowR.z'),
-      );
-      this.elbowR.quaternion.setFromEuler(this._euler);
-      this.twist(this.elbowR, v('elbowR.twist'));
-    }
-    // 손목 — normalized 리그의 rest 는 identity 라 전 채널 0이면 기록해도 무변화(비퇴행).
-    // drift 미적용(손목 미세진동은 상완 drift가 FK로 이미 전달).
-    if (this.handL) {
-      this._euler.set(v('handL.x'), v('handL.y'), v('handL.z'));
-      this.handL.quaternion.setFromEuler(this._euler);
-    }
-    if (this.handR) {
-      this._euler.set(v('handR.x'), v('handR.y'), v('handR.z'));
-      this.handR.quaternion.setFromEuler(this._euler);
-    }
+    // 길이축 롤은 오일러 뒤에 post-multiply (euler 로 표현 불가 — 파일 상단 주석 참조)
+    this.twist(this.armL, v('armL.twist'));
+    this.twist(this.armR, v('armR.twist'));
+    this.twist(this.elbowL, v('elbowL.twist'));
+    this.twist(this.elbowR, v('elbowR.twist'));
 
     const blink = v('blink');
     this.vrm.expressionManager?.setValue(

@@ -13,7 +13,12 @@ import {
   type AnimTemplate,
   type ChannelValues,
 } from './scheduler';
-import { Channels, BASELINE, EMOTION_CHANNELS } from './channels';
+import {
+  Channels,
+  BASELINE,
+  DERIVE_DEFAULT,
+  EMOTION_CHANNELS,
+} from './channels';
 import { MOODS, IDLE_POSES, TONE_LOOP_NAMES, WAVE } from './moods';
 
 // 일회성 클립이 전담하는 채널은 held 표정(moodExprClip)에서 제외 — 채널 단일 소유:
@@ -136,7 +141,9 @@ export function useAnimator(
       MOODS.neutral.loops.forEach((t) => scheduler.add(t, true));
       if (greetOnReady) scheduler.add({ ...WAVE, delay: [700, 900] }, false);
       schedulerRef.current = scheduler;
-      channelsRef.current = new Channels(vrm);
+      // 본 파생 활성(리뉴얼 3단계): 목·어깨·UpperChest 가 기존 채널에서 회전을 나눠 진다.
+      // 총 회전량은 유지되고 관절만 분절 → moods.ts 무변경으로 전 동작에 소급(channels.ts).
+      channelsRef.current = new Channels(vrm, DERIVE_DEFAULT);
       propMoodSeenRef.current = 'neutral'; // 새 VRM은 neutral 표정으로 시작
       activeMoodRef.current = 'neutral';
     }

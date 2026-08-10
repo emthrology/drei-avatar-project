@@ -34,6 +34,14 @@ function triggerWave() {
   window.dispatchEvent(new CustomEvent('companion:wave'));
 }
 
+// 인사(손인사+미소) — 컴패니언 진입 시 자동 재생되는 것과 **같은 경로**(VRMA_CLIPS 의 id).
+// 탭을 다시 열지 않고 확인하려고 둔다.
+function triggerGreet() {
+  window.dispatchEvent(
+    new CustomEvent('companion:vrma', { detail: { id: 'greet' } }),
+  );
+}
+
 // 손동작 수치 프로브 — ms 동안 팔 기하를 샘플링해 판정(anim/probe.ts).
 // 육안 대신 수치로 보므로 "덜렁덜렁" 같은 표현이 어느 지표 불합격인지로 환원된다.
 function triggerProbe(ms = 3000, side: 'L' | 'R' = 'R') {
@@ -362,6 +370,20 @@ export function DebugPanel({
           }}
         >
           👋 손인사
+        </button>
+        <button
+          onClick={triggerGreet}
+          style={{
+            background: '#312e81',
+            color: '#e0e7ff',
+            border: '1px solid #4f46e5',
+            borderRadius: 6,
+            padding: '4px 8px',
+            cursor: 'pointer',
+            fontSize: 11,
+          }}
+        >
+          😊 인사(등장)
         </button>
         {GESTURE_LABELS.map((label, i) => (
           <button

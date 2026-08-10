@@ -26,7 +26,7 @@ const head: AnimTemplate = {
         name: 'head',
         p: 0.7,
         delay: [0, 400],
-        dt: [[1000, 4000]],
+        dt: [[800, 2600]],
         vs: {
           'head.rotateX': [[-0.03, 0.05]],
           'head.rotateY': [[-0.09, 0.09]],
@@ -36,7 +36,7 @@ const head: AnimTemplate = {
       // 가끔 크게 둘러보기 — 머리를 확 돌렸다 hold-last로 잠시 유지
       {
         name: 'head',
-        delay: [400, 1200],
+        delay: [300, 800],
         dt: [[700, 1500]],
         vs: {
           'head.rotateY': [[-0.22, 0.22]],
@@ -64,16 +64,16 @@ export const IDLE_SPINE_POSES: AnimTemplate[] = [
     name: 'pose',
     label: '둘러보기L',
     p: 0.3,
-    delay: [1500, 3500],
-    dt: [[1600, 2400]],
+    delay: [1000, 2300],
+    dt: [[1300, 2000]],
     vs: { 'spine.x': [0.02], 'spine.y': [0.35], 'spine.z': [-0.05] },
   },
   {
     name: 'pose',
     label: '둘러보기R',
     p: 0.3,
-    delay: [1500, 3500],
-    dt: [[1600, 2400]],
+    delay: [1000, 2300],
+    dt: [[1300, 2000]],
     vs: { 'spine.x': [0.02], 'spine.y': [-0.35], 'spine.z': [0.05] },
   },
 ];
@@ -87,37 +87,37 @@ const pose: AnimTemplate = {
   alt: [
     {
       name: 'pose',
-      delay: [2000, 5000],
+      delay: [1300, 3200],
       dt: [[1400, 2400]],
       vs: { 'spine.x': [0.0], 'spine.y': [0.06], 'spine.z': [0.05] },
     },
     {
       name: 'pose',
-      delay: [2000, 5000],
+      delay: [1300, 3200],
       dt: [[1400, 2400]],
       vs: { 'spine.x': [0.03], 'spine.y': [-0.08], 'spine.z': [-0.06] },
     },
     {
       name: 'pose',
-      delay: [2000, 5000],
+      delay: [1300, 3200],
       dt: [[1400, 2400]],
       vs: { 'spine.x': [-0.02], 'spine.y': [0.1], 'spine.z': [0.04] },
     },
     {
       name: 'pose',
-      delay: [2000, 4500],
+      delay: [1300, 2900],
       dt: [[1200, 2200]],
       vs: { 'spine.x': [0.05], 'spine.y': [0.0], 'spine.z': [-0.03] },
     },
     {
       name: 'pose',
-      delay: [1500, 4000],
+      delay: [1000, 2600],
       dt: [[1000, 1800]],
       vs: { 'spine.x': [0.0], 'spine.y': [0.13], 'spine.z': [-0.04] },
     },
     {
       name: 'pose',
-      delay: [1500, 4000],
+      delay: [1000, 2600],
       dt: [[1000, 1800]],
       vs: { 'spine.x': [0.01], 'spine.y': [-0.12], 'spine.z': [0.06] },
     },
@@ -160,7 +160,7 @@ export const IDLE_ARM_POSES: AnimTemplate[] = [
     label: '허리짚기L',
     p: 0.05, // 빈도 낮춤 (가끔만)
     ease: 2.8,
-    delay: [2500, 5500],
+    delay: [1700, 3600],
     dt: [[800, 1300]],
     vs: {
       'armL.z': [-1.02],
@@ -176,7 +176,7 @@ export const IDLE_ARM_POSES: AnimTemplate[] = [
     label: '허리짚기R',
     p: 0.05, // 빈도 낮춤 (가끔만)
     ease: 2.8,
-    delay: [2500, 5500],
+    delay: [1700, 3600],
     dt: [[800, 1300]],
     vs: {
       'armR.z': [1.02],
@@ -192,7 +192,7 @@ export const IDLE_ARM_POSES: AnimTemplate[] = [
     label: '뒷짐',
     p: 0.15,
     ease: 2.8,
-    delay: [2800, 6000],
+    delay: [1900, 3900],
     dt: [[900, 1400]],
     vs: {
       'armL.x': [0.26],
@@ -212,7 +212,7 @@ export const IDLE_ARM_POSES: AnimTemplate[] = [
     label: '앞으로모으기',
     // p 생략 → 나머지 확률 흡수 (pickAlt 마지막)
     ease: 2.8,
-    delay: [3000, 6500],
+    delay: [2000, 4200],
     dt: [[1000, 1600]],
     vs: {
       'armL.z': [-1.2],
@@ -232,22 +232,28 @@ export const IDLE_POSES: AnimTemplate[] = [
   ...IDLE_SPINE_POSES,
 ];
 
-// 차렷+미세 무게이동 (높은 확률, 길게 유지) — armL/R.z 작은 gaussian으로 상시 미동
+// 차렷+미세 무게이동 (높은 확률, 길게 유지) — armL/R.z 작은 범위로 상시 미동
+//
+// ⚠️ 여기만 **균등분포**(`samples=1`)를 쓴다. 기본값(5회 평균)은 구간 중앙에 몰려서, 폭이
+// 0.06~0.10rad 여도 **연속 두 롤의 실제 간격은 그 14.6% = 0.5~0.84°** 뿐이다 → dt 1.8s 에 걸치면
+// 0.28~0.47°/s 로 인지 문턱(0.5°/s) 바로 아래에 깔린다. 팔이 '움직이는 중인데 멈춰 보이는' 상태가
+// 20초씩 이어진 원인(motionProfile 의 WORST_STILL). 균등분포는 같은 간격이 33.4% 로 **2.28배**가
+// 되어 문턱을 넘는다 — **구간 폭은 그대로라 자세가 더 벌어지지 않는다**(진폭이 아니라 분포를 고침).
+// 상세 docs/motion-renewal-plan.md 2단계.
 const armRelaxed: AnimTemplate = {
   name: 'armPose',
   // 차렷 55% (지배 완화 — 나머지 45%: 허리짚기L/R 0.05, 뒷짐 0.15, 앞으로모으기 잔여 0.2).
-  // micro-drift가 차렷도 미세 흔들어 정지 아님.
   p: 0.55,
   ease: 3,
-  delay: [1800, 4000],
+  delay: [1200, 2600],
   dt: [[1400, 2200]],
   vs: {
-    'armL.z': [[-1.33, -1.27]],
-    'armR.z': [[1.27, 1.33]],
-    'armL.x': [[-0.03, 0.03]],
-    'armR.x': [[-0.03, 0.03]],
-    'elbowL.z': [[-0.08, 0.02]],
-    'elbowR.z': [[-0.02, 0.08]],
+    'armL.z': [[-1.33, -1.27, 1, 1]],
+    'armR.z': [[1.27, 1.33, 1, 1]],
+    'armL.x': [[-0.03, 0.03, 1, 1]],
+    'armR.x': [[-0.03, 0.03, 1, 1]],
+    'elbowL.z': [[-0.08, 0.02, 1, 1]],
+    'elbowR.z': [[-0.02, 0.08, 1, 1]],
   },
 };
 

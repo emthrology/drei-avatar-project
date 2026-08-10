@@ -17,6 +17,7 @@
     "format:check": "prettier --check .",
     "probe": "node scripts/probeMotion.mjs",
     "probe:tab": "node scripts/probeAttach.mjs",
+    "motion:stat": "vitest run src/companion/anim/motionProfile.test.ts --disable-console-intercept",
     "verify": "vitest run && npm run probe -- --wave --char male1 && npm run probe -- --wave --char female1"
   },
   "dependencies": {
