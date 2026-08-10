@@ -29,6 +29,17 @@ export interface VrmaClipDef {
    * 그대로 재생하면 프레임을 벗어난다(실측). 회전은 그대로 둔다 — 전신 일관성이 깨지므로.
    */
   keepHipsPosition?: boolean;
+  /**
+   * 재생 동안 함께 걸 무드(표정). 재생 시작에 적용하고 끝나면 `moodAfter` 로 되돌린다.
+   *
+   * **본이 아니라 표정 레이어라서 합성이 성립한다** — 공식 7종에도 우리 wave.vrma 에도
+   * expression 트랙이 아예 없어서(파일 상단 참조) mixer 가 표정을 안 건드린다. 그래서 무드의
+   * held 표정·일회성 눈웃음이 클립 재생 중에도 그대로 산다. 반대로 본은 mixer 가 통째로
+   * 덮어쓰므로, 무드의 **루프 톤**(호흡·머리 템포)은 재생 중엔 안 보이고 복귀 후에 반영된다.
+   */
+  mood?: string;
+  /** 재생 종료 후 되돌릴 무드 (기본 neutral) */
+  moodAfter?: string;
 }
 
 /**
@@ -66,6 +77,25 @@ export const VRMA_WAVE: VrmaClipDef = {
   fadeOut: 500,
 };
 
+/**
+ * 인사 — 손인사(본) + happy(표정) 합성. **컴패니언 진입 시 1회** 재생된다(useVrmaLayer greetOnReady).
+ *
+ * 새 `.vrma` 파일이 아니다 — 같은 클립에 무드를 얹은 **구성**이다. 레이어가 분리돼 있어서
+ * (본=VRMA / 표정=무드 시스템) 파일을 새로 저작하지 않고 조합만으로 만들어진다.
+ * 표정을 `.vrma` 에 굽지 않는다는 원칙(파일 상단)의 실익이 여기서 나온다 — 구우면 무드별로
+ * 파일이 하나씩 필요해진다.
+ *
+ * 무표정으로 손만 흔드는 것보다 인사답고, `happy` 진입의 일회성 눈웃음(HAPPY_EYE)이 클립
+ * 길이(3s)와 맞물려 "웃으며 손 흔들고 → 평상시 표정으로" 가 한 번에 끝난다.
+ */
+export const VRMA_GREET: VrmaClipDef = {
+  ...VRMA_WAVE,
+  id: 'greet',
+  label: '인사(손+미소)',
+  mood: 'happy',
+};
+
 export const VRMA_CLIPS: Record<string, VrmaClipDef> = {
   [VRMA_WAVE.id]: VRMA_WAVE,
+  [VRMA_GREET.id]: VRMA_GREET,
 };

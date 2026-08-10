@@ -26,7 +26,20 @@ import {
   createVRMAnimationClip,
   type VRMAnimation,
 } from '@pixiv/three-vrm-animation';
-import { VRMA_CLIPS, VRMA_WAVE, filterTracks, type VrmaClipDef } from './clips';
+import {
+  VRMA_CLIPS,
+  VRMA_GREET,
+  VRMA_WAVE,
+  filterTracks,
+  type VrmaClipDef,
+} from './clips';
+
+// 무드 전환은 useAnimator 가 `companion:mood` 로 받는다(디버그 패널과 같은 경로).
+// 여기서 표정 채널을 직접 건드리지 않는 이유: 표정은 무드 시스템이 단일 소유해야
+// held/일회성 분해(HAPPY_EYE 등)와 무드 간 전환 ramp 가 한 곳에서 관리된다.
+function setMood(mood: string) {
+  window.dispatchEvent(new CustomEvent('companion:mood', { detail: { mood } }));
+}
 
 const FPS = 60; // 공식 7종 실측 keyframe rate (subclip 프레임 변환용)
 
@@ -70,10 +83,12 @@ interface Playing {
   t: number;
   fadeIn: number; // 초
   fadeOut: number;
+  /** 재생 중 걸어둔 무드가 있으면 종료 시 되돌릴 무드 (없으면 무드 미개입) */
+  moodAfter: string | null;
 }
 
 interface Options {
-  /** 등장 시 손인사 1회 (컴패니언). 절차 WAVE 대신 이쪽이 소유 */
+  /** 등장 시 인사 1회 (컴패니언 진입) — 손인사 + happy 합성(VRMA_GREET). 절차 WAVE 대신 이쪽이 소유 */
   greetOnReady?: boolean;
   enabled?: boolean;
 }
@@ -107,8 +122,10 @@ export function useVrmaLayer(
       if (def?.url) pendingRef.current = def;
     };
     const onStop = () => {
+      const moodAfter = playingRef.current?.moodAfter;
       playingRef.current = null;
       mixerRef.current?.stopAllAction();
+      if (moodAfter) setMood(moodAfter); // 중단해도 표정은 남지 않게
     };
     window.addEventListener('companion:wave', onWave);
     window.addEventListener('companion:vrma', onVrma);
@@ -175,6 +192,10 @@ export function useVrmaLayer(
         if (obj) bones.push(obj);
       }
 
+      // 무드는 본 블렌드보다 **먼저** 건다 — 표정 ramp(400~600ms)가 팔이 올라오는 동안
+      // 진행돼 손을 흔들 땐 이미 웃고 있다. 클립이 끝나고 걸면 표정만 뒤늦게 남는다.
+      if (def.mood) setMood(def.mood);
+
       const fadeIn = (def.fadeIn ?? 250) / 1000;
       const fadeOut = (def.fadeOut ?? 400) / 1000;
       playingRef.current = {
@@ -188,6 +209,7 @@ export function useVrmaLayer(
         // 진입+복귀가 길이를 넘으면 최대 가중치에 못 닿는다 → 클립 길이에 맞춰 축소
         fadeIn: Math.min(fadeIn, clip.duration * 0.4),
         fadeOut: Math.min(fadeOut, clip.duration * 0.4),
+        moodAfter: def.mood ? (def.moodAfter ?? 'neutral') : null,
       };
     } catch (err) {
       console.error('[vrma] 재생 실패', def.url, err);
@@ -205,7 +227,7 @@ export function useVrmaLayer(
       greetDelayRef.current += delta;
       if (greetDelayRef.current >= 0.8) {
         greetedRef.current = true;
-        pendingRef.current = VRMA_WAVE;
+        pendingRef.current = VRMA_GREET; // 손인사 + 미소
       }
     }
     if (pendingRef.current) {
@@ -257,6 +279,9 @@ export function useVrmaLayer(
       p.action.stop();
       for (let i = 0; i < p.bones.length; i++)
         p.bones[i].quaternion.copy(p.prevOut[i]);
+      // 걸어둔 무드 해제 — 표정 ramp 는 useAnimator 가 처리하므로 뚝 끊기지 않는다.
+      // (게임 이벤트가 그 사이 다른 무드를 걸었다면 그쪽이 prop 경로로 다시 이긴다)
+      if (p.moodAfter) setMood(p.moodAfter);
       playingRef.current = null; // 이 프레임에서 이미 w=0 → 다음 프레임부터 순수 절차
     }
   });
