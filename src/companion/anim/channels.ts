@@ -82,39 +82,216 @@ export const BASELINE: Record<string, number> = {
 // chest.inhale(0~1) → 가슴 본 X회전 스케일 (기존 useIdleAnimation 0.015 진폭 보존)
 export const CHEST_INHALE_SCALE = 0.03;
 
-// idle micro-drift (2번): hold(제스처 정지·포즈 유지) 구간에도 팔·몸통이 미세하게 살아있도록
-// 최종 회전에 초저주파 sine을 상시 가산. apply-레이어라 스케줄러 채널 단일 소유와 무관하고,
-// state 맵은 비훼손(tick 반환=scheduler.live 참조 → mutate 금지, euler 로컬에만 더함).
-// 활성 모션 땐 진폭에 묻히고 hold 때만 보임 → hold 감지 불필요. 머리(이미 미동)·얼굴(표정 동기)·
-// 호흡(chest.inhale, 이미 진동)은 제외. 서로 안 맞아떨어지는 주기(≈5~12s)로 반복감 제거.
-// DRIFT_AMP=0이면 완전 무영향(비퇴행). 진폭은 육안 튜닝값.
+// ── 자세 동요 (postural sway) — 리뉴얼 4단계에서 micro-drift 를 승격한 것 ──────────
+//
+// 무엇: 본별 최종 회전에 상시 가산하는 저주파 진동. **키는 채널이 아니라 본의 축**(`<본>.<축>`)
+// 이고, boneEulers 가 파생까지 끝낸 뒤 마지막에 더한다 → 어느 클립이 돌든 무관하게 항상 산다.
+// apply-레이어라 스케줄러의 채널 단일 소유·hold-last 계약과 무관하고, state 맵도 비훼손이다
+// (tick 반환 = scheduler.live 참조 → mutate 금지. euler 로컬에만 더한다).
+//
+// 왜 이 형태인가 (4단계 = 정적 제거):
+// - 원래 목적은 hold 구간의 '얼어붙음' 완화였는데, 속도가 인지 문턱(0.5°/s)의 절반이라 **못 가렸다.**
+//   루프가 `delay 대기 → 램프 → 대기`라 채널이 구조적으로 수 초씩 상수가 되는 게 근본 원인.
+// - ⚠️ **sine 하나로는 문턱을 못 넘긴다** — 속도 = 진폭×각주파수×|cos| 라 반주기마다 0을 지난다.
+//   진폭을 키워도 정지 구간이 짧아질 뿐 사라지지 않는다(그리고 커지면 '물 위에 뜬' 느낌이 난다).
+//   → **축마다 서로 안 맞아떨어지는 4성분을 합성**한다. 속도 0 지점이 겹칠 일이 드물어 합이
+//   문턱 위에 머물고, 축이 2개 이상인 본은 축끼리 또 직교 합성돼 더 안정적이다.
+// - **성분 수보다 축별 속도 크기가 지배적이다**(실측: 성분을 2→4로 늘리면서 진폭을 1/√f 로
+//   깔았더니 최장 정지가 3.75→5.97s 로 오히려 나빠졌다). 그래서 진폭을 `a ∝ 1/f` 로 배분해
+//   **성분마다 속도 기여를 균등**하게 만들고, 축별 최대 속도를 문턱의 2.4~3배로 잡는다.
+// - ⚠️ **속도를 얻으려고 주파수만 올리지 않는다.** 진폭 0.1° 짜리 빠른 성분을 넣으면 지표는
+//   통과하지만 눈에는 아무것도 안 보인다 = 측정기를 속이는 것(문턱 0.5°/s 는 애초에 **인지**
+//   기준이다). 대역을 0.5~2.6 rad/s(주기 2.4~12.6s)로 묶어 두는 이유.
+//
+// DRIFT_AMP=0 이면 완전 무영향(비퇴행) — 부유감이 나면 여기부터 0으로 내려 원인을 가른다.
+// 얼굴(표정 동기)·손목(상완 동요가 FK 로 전달)·chest.inhale(이미 진동)은 대상 아님.
 export const DRIFT_AMP = 1; // 전역 배율 (0=off)
-export const DRIFT: Record<string, [number, number, number]> = {
-  // 채널: [주파수 rad/s, 위상, 진폭 rad(≈0.3~0.5°)]
-  'spine.y': [0.53, 0.0, 0.008],
-  'spine.z': [0.61, 2.1, 0.007],
-  'chest.leanX': [0.71, 1.0, 0.005],
-  'chest.leanZ': [0.83, 3.0, 0.005],
-  'armL.z': [0.67, 0.4, 0.008],
-  'armR.z': [0.73, 2.9, 0.008],
-  'armL.x': [0.97, 0.5, 0.006],
-  'armR.x': [1.03, 3.6, 0.006],
-  'elbowL.z': [1.09, 1.2, 0.005],
-  'elbowR.z': [1.19, 4.0, 0.005],
-  // 파생 본(아래 boneEulers). 원 본의 비례 사본이기만 하면 관절이 늘어도 '한 덩어리'로 도므로,
-  // 서로 안 맞아떨어지는 주기를 줘서 목·어깨가 제 나름의 미동을 갖게 한다. 파생이 꺼져 있으면
-  // (계수 0) 해당 본을 아예 안 쓰므로 이 항목들도 무영향.
-  'neck.y': [0.59, 1.6, 0.006],
-  'neck.z': [0.79, 4.4, 0.005],
-  'shoulderL.z': [0.89, 0.9, 0.005],
-  'shoulderR.z': [1.13, 3.3, 0.005],
+
+/** 성분 [주파수 rad/s, 위상, 진폭 rad] */
+export type DriftComp = [number, number, number];
+
+export const DRIFT: Record<string, DriftComp[]> = {
+  // 축당 4성분(느림→빠름), 진폭 `a ∝ 1/f` 로 속도 기여 균등. 축별 최대 속도 1.2~1.5°/s
+  // (문턱의 2.4~3배), **축당 총 진폭 0.95~1.41°** — 자세 동요로 보일 크기이자, 이보다 키우면
+  // 부유감이 나기 시작하는 선. 눈으로 부유감이 나면 진폭부터 내린다(속도가 아니라).
+  // 주파수는 축마다 전부 다르게 흩어 놨다 — 같은 주파수를 공유하면 위상이 달라도 상대
+  // 위상이 고정돼 온몸이 한 덩어리로 규칙적으로 흔들린다(가장 티 나는 실패 모드).
+  // 값은 생성물이라 손으로 미세조정하기보다 그룹 목표 속도/진폭을 바꿔 다시 까는 편이 낫다.
+  'head.x': [
+    [0.6, 3.7, 0.0087],
+    [1.06, 6.1, 0.0049],
+    [1.6, 0.0, 0.0033],
+    [2.17, 0.7, 0.0024],
+  ],
+  'head.y': [
+    [0.75, 5.3, 0.007],
+    [1.29, 3.1, 0.0041],
+    [1.69, 1.8, 0.0031],
+    [2.31, 5.8, 0.0023],
+  ],
+  'head.z': [
+    [0.57, 4.9, 0.0092],
+    [1.14, 6.0, 0.0046],
+    [1.76, 1.4, 0.003],
+    [2.31, 1.7, 0.0023],
+  ],
+  'neck.x': [
+    [0.73, 6.2, 0.0078],
+    [1.31, 0.3, 0.0043],
+    [1.7, 0.8, 0.0033],
+    [2.37, 6.1, 0.0024],
+  ],
+  'neck.y': [
+    [0.62, 5.9, 0.0091],
+    [1.23, 1.9, 0.0046],
+    [1.63, 1.9, 0.0035],
+    [2.35, 3.0, 0.0024],
+  ],
+  'neck.z': [
+    [0.51, 2.0, 0.0111],
+    [1.18, 1.5, 0.0048],
+    [1.75, 1.6, 0.0032],
+    [2.36, 1.1, 0.0024],
+  ],
+  'spine.x': [
+    [0.72, 3.4, 0.0091],
+    [1.17, 0.7, 0.0056],
+    [1.73, 4.2, 0.0038],
+    [2.21, 4.1, 0.003],
+  ],
+  'spine.y': [
+    [0.59, 4.7, 0.0111],
+    [1.32, 6.1, 0.005],
+    [1.85, 1.5, 0.0035],
+    [2.27, 1.2, 0.0029],
+  ],
+  'spine.z': [
+    [0.74, 2.6, 0.0088],
+    [1.25, 2.2, 0.0052],
+    [1.87, 2.8, 0.0035],
+    [2.28, 1.0, 0.0029],
+  ],
+  'upperChest.x': [
+    [0.8, 5.6, 0.0076],
+    [1.09, 2.7, 0.0056],
+    [1.66, 1.7, 0.0037],
+    [2.28, 1.9, 0.0027],
+  ],
+  'upperChest.y': [
+    [0.54, 5.5, 0.0113],
+    [1.35, 2.9, 0.0045],
+    [1.68, 3.0, 0.0036],
+    [2.28, 2.8, 0.0027],
+  ],
+  'upperChest.z': [
+    [0.59, 0.4, 0.0104],
+    [1.35, 3.1, 0.0045],
+    [1.83, 1.4, 0.0033],
+    [2.22, 4.9, 0.0028],
+  ],
+  'chest.x': [
+    [0.5, 4.1, 0.0118],
+    [1.18, 2.4, 0.005],
+    [1.79, 1.4, 0.0033],
+    [2.17, 1.5, 0.0027],
+  ],
+  'chest.z': [
+    [0.7, 0.9, 0.0084],
+    [1.19, 2.0, 0.0049],
+    [1.85, 3.1, 0.0032],
+    [2.37, 3.7, 0.0025],
+  ],
+  'shoulderL.x': [
+    [0.5, 2.5, 0.0131],
+    [1.27, 4.1, 0.0052],
+    [1.9, 5.3, 0.0034],
+    [2.29, 0.0, 0.0029],
+  ],
+  'shoulderL.z': [
+    [0.62, 0.6, 0.0106],
+    [1.16, 1.9, 0.0056],
+    [1.81, 2.3, 0.0036],
+    [2.38, 3.3, 0.0027],
+  ],
+  'shoulderR.x': [
+    [0.68, 3.4, 0.0096],
+    [1.09, 0.9, 0.006],
+    [1.8, 3.8, 0.0036],
+    [2.19, 5.9, 0.003],
+  ],
+  'shoulderR.z': [
+    [0.6, 4.8, 0.0109],
+    [1.26, 5.8, 0.0052],
+    [1.77, 3.9, 0.0037],
+    [2.26, 1.2, 0.0029],
+  ],
+  'armL.x': [
+    [0.8, 5.8, 0.0082],
+    [1.35, 3.7, 0.0048],
+    [1.82, 4.0, 0.0036],
+    [2.4, 3.2, 0.0027],
+  ],
+  'armL.z': [
+    [0.71, 5.3, 0.0092],
+    [1.19, 2.8, 0.0055],
+    [1.77, 5.8, 0.0037],
+    [2.23, 1.3, 0.0029],
+  ],
+  'armR.x': [
+    [0.56, 0.2, 0.0117],
+    [1.3, 2.0, 0.005],
+    [1.7, 3.2, 0.0038],
+    [2.21, 4.9, 0.003],
+  ],
+  'armR.z': [
+    [0.73, 1.1, 0.009],
+    [1.16, 3.2, 0.0056],
+    [1.8, 2.6, 0.0036],
+    [2.27, 3.8, 0.0029],
+  ],
+  'elbowL.x': [
+    [0.6, 1.0, 0.0105],
+    [1.29, 1.0, 0.0049],
+    [1.87, 1.7, 0.0034],
+    [2.23, 1.2, 0.0028],
+  ],
+  'elbowL.z': [
+    [0.75, 5.0, 0.0084],
+    [1.22, 4.3, 0.0052],
+    [1.8, 2.3, 0.0035],
+    [2.33, 6.1, 0.0027],
+  ],
+  'elbowR.x': [
+    [0.57, 5.5, 0.0111],
+    [1.21, 5.6, 0.0052],
+    [1.71, 5.7, 0.0037],
+    [2.45, 5.4, 0.0026],
+  ],
+  'elbowR.z': [
+    [0.66, 2.9, 0.0096],
+    [1.12, 3.2, 0.0056],
+    [1.9, 2.3, 0.0033],
+    [2.19, 4.1, 0.0029],
+  ],
 };
 
-// 채널 ch 의 t초 시점 drift 값. apply()와 모션 프로파일러(motionProfile.ts)가 **같은 함수**를 쓴다
-// — 프로파일러가 이 표를 복사해 가면 채널이 늘 때 사본만 조용히 낡는다.
-export function driftAt(ch: string, t: number): number {
-  const c = DRIFT[ch];
-  return c ? Math.sin(t * c[0] + c[1]) * c[2] * DRIFT_AMP : 0;
+// 본 축 key 의 t초 시점 drift. apply()와 모션 프로파일러(motionProfile.ts)가 **같은 함수**를
+// 쓴다 — 프로파일러가 이 표를 복사해 가면 항목이 늘 때 사본만 조용히 낡는다.
+export function driftAt(key: string, t: number): number {
+  const comps = DRIFT[key];
+  if (!comps) return 0;
+  let sum = 0;
+  for (const [freq, phase, amp] of comps)
+    sum += Math.sin(t * freq + phase) * amp;
+  return sum * DRIFT_AMP;
+}
+
+/** 본 축 key 의 이론상 최대 각속도 (deg/s) — 성분 속도의 합. 예산 테스트가 쓴다 */
+export function driftPeakSpeed(key: string): number {
+  const comps = DRIFT[key];
+  if (!comps) return 0;
+  const rad = comps.reduce((a, [freq, , amp]) => a + amp * freq, 0);
+  return rad * DRIFT_AMP * (180 / Math.PI);
 }
 
 // ── 본 파생 (리뉴얼 3단계 — 본 커버리지) ──────────────────────────────────────
@@ -161,67 +338,66 @@ export function boneEulers(
   t = 0,
 ): BoneEulers {
   const v = (k: string) => state[k] ?? BASELINE[k] ?? 0;
-  const d = (k: string) => driftAt(k, t);
   const o: BoneEulers = {};
+  // 자세 동요를 **본 단위로, 파생이 끝난 뒤** 가산한다. 채널에 더하면 분배 계수만큼 쪼개져
+  // (예: spine drift 의 25%가 UpperChest 로) 본별 신호의 독립성이 사라진다.
+  const set = (bone: string, x: number, y: number, z: number) => {
+    o[bone] = [
+      x + driftAt(`${bone}.x`, t),
+      y + driftAt(`${bone}.y`, t),
+      z + driftAt(`${bone}.z`, t),
+    ];
+  };
 
-  // 머리 — idle 미동(rotate) + 제스처(g) 합성. base+delta (머리 자체는 drift 제외, 이미 미동)
+  // 머리 — idle 미동(rotate) + 제스처(g) 합성. base+delta
   const hx = v('head.rotateX') + v('head.gx');
   const hy = v('head.rotateY') + v('head.gy');
   const hz = v('head.rotateZ') + v('head.gz');
   if (cfg.neck > 0) {
     const k = cfg.neck;
-    o.neck = [hx * k + d('neck.x'), hy * k + d('neck.y'), hz * k + d('neck.z')];
-    o.head = [hx * (1 - k), hy * (1 - k), hz * (1 - k)];
+    set('neck', hx * k, hy * k, hz * k);
+    set('head', hx * (1 - k), hy * (1 - k), hz * (1 - k));
   } else {
-    o.head = [hx, hy, hz];
+    set('head', hx, hy, hz);
   }
 
   // 몸통 포즈 (Spine 절대 회전 — 상반신 체중이동)
   const px = v('spine.x');
-  const py = v('spine.y') + d('spine.y');
-  const pz = v('spine.z') + d('spine.z');
+  const py = v('spine.y');
+  const pz = v('spine.z');
   if (cfg.upperChest > 0) {
     const k = cfg.upperChest;
-    o.upperChest = [px * k, py * k, pz * k];
-    o.spine = [px * (1 - k), py * (1 - k), pz * (1 - k)];
+    set('upperChest', px * k, py * k, pz * k);
+    set('spine', px * (1 - k), py * (1 - k), pz * (1 - k));
   } else {
-    o.spine = [px, py, pz];
+    set('spine', px, py, pz);
   }
 
   // 가슴 — x=호흡+제스처린(앞뒤), y=제스처턴, z=제스처린(좌우)을 한 본에 합성
-  o.chest = [
-    v('chest.inhale') * CHEST_INHALE_SCALE +
-      v('chest.leanX') +
-      d('chest.leanX'),
+  set(
+    'chest',
+    v('chest.inhale') * CHEST_INHALE_SCALE + v('chest.leanX'),
     v('chest.turnY'),
-    v('chest.leanZ') + d('chest.leanZ'),
-  ];
+    v('chest.leanZ'),
+  );
 
   // 팔 — 어깨는 baseline(차렷) 대비 **편차**만 나눠 진다. 정적 자세(팔 내림)에서 어깨가
   // 딸려 올라가면 안 되므로 baseline 자체는 상완에 남긴다.
   for (const s of ['L', 'R'] as const) {
-    const ax = v(`arm${s}.x`) + d(`arm${s}.x`);
+    const ax = v(`arm${s}.x`);
     const ay = v(`arm${s}.y`);
-    const az = v(`arm${s}.z`) + d(`arm${s}.z`);
+    const az = v(`arm${s}.z`);
     if (cfg.shoulder > 0) {
       const k = cfg.shoulder;
       const dz = az - BASELINE[`arm${s}.z`];
-      o[`shoulder${s}`] = [
-        ax * k + d(`shoulder${s}.x`),
-        0,
-        dz * k + d(`shoulder${s}.z`),
-      ];
-      o[`arm${s}`] = [ax * (1 - k), ay, BASELINE[`arm${s}.z`] + dz * (1 - k)];
+      set(`shoulder${s}`, ax * k, 0, dz * k);
+      set(`arm${s}`, ax * (1 - k), ay, BASELINE[`arm${s}.z`] + dz * (1 - k));
     } else {
-      o[`arm${s}`] = [ax, ay, az];
+      set(`arm${s}`, ax, ay, az);
     }
-    o[`elbow${s}`] = [
-      v(`elbow${s}.x`),
-      v(`elbow${s}.y`),
-      v(`elbow${s}.z`) + d(`elbow${s}.z`),
-    ];
+    set(`elbow${s}`, v(`elbow${s}.x`), v(`elbow${s}.y`), v(`elbow${s}.z`));
     // 손목 — normalized 리그의 rest 는 identity 라 전 채널 0이면 기록해도 무변화(비퇴행).
-    // drift 미적용(손목 미세진동은 상완 drift 가 FK 로 이미 전달).
+    // drift 대상 아님(손목 미세진동은 상완 drift 가 FK 로 이미 전달).
     o[`hand${s}`] = [v(`hand${s}.x`), v(`hand${s}.y`), v(`hand${s}.z`)];
   }
   return o;

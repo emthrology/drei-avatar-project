@@ -6,8 +6,8 @@
 // "무효한 기준선이었다"는 실측 근거가 있을 때만 조정하고, 조정 사실과 근거를 반드시 보고한다.
 // 반대로 **조이는 것도 의무가 아니다** — 아래 예산 블록의 '가드레일이지 래칫이 아니다' 참조.
 //
-// 남은 조이기:
-//   4단계(연속 신호화)   → WORST_STILL 1.0
+// 남은 조이기: 없음. (4단계의 목표치 WORST_STILL 1.0 도 **달성 후에도 예산은 그대로 둔다** —
+// 실측값은 아래 표 출력과 계획서에 남기고, 예산은 회귀를 잡을 만큼만 느슨하게 유지한다.)
 //
 // ⚠️ 판정은 **다중 시드 평균**(profileMean)으로 한다. 단일 시드는 난수 소비량이 달라지는 변경에
 // 대해 비교 불가다 — 근거는 motionProfile.ts profileMean 주석.
@@ -19,7 +19,7 @@ import {
   profileMean,
   STILL_THRESHOLD,
 } from './motionProfile';
-import { DERIVE_OFF, DRIFT, DRIFT_AMP } from './channels';
+import { DERIVE_OFF, DRIFT, driftAt, driftPeakSpeed } from './channels';
 
 const MINUTES = 3; // 시드당 시뮬 길이
 
@@ -106,15 +106,30 @@ describe('본 파생 off = 기존 경로 (비퇴행)', () => {
   });
 });
 
-describe('micro-drift 는 정지를 가리지 못한다 (4단계의 근거)', () => {
-  it('drift 최대 각속도가 인지 문턱 미만', () => {
-    // sine 의 최대 각속도 = 진폭 × 각주파수. 이게 문턱보다 작으면 hold 구간의 '얼어붙음'을
-    // drift 로는 못 가린다 = 4단계(연속 신호화)가 별도로 필요하다는 근거.
-    const peak = Math.max(
-      ...Object.values(DRIFT).map(
-        ([freq, , amp]) => amp * DRIFT_AMP * freq * (180 / Math.PI),
-      ),
-    );
-    expect(peak).toBeLessThan(STILL_THRESHOLD);
+// ⚠️ **이 단정문은 4단계에서 의식적으로 뒤집었다.** 원래는 "drift 최대 각속도 < 인지 문턱"
+// 이었고, 그게 4단계(연속 신호화)가 별도로 필요하다는 근거였다(0단계가 일부러 박아둔 장치).
+// 4단계가 바로 그 문턱을 넘기는 작업이므로, 이제는 **넘겼는지**를 단정한다.
+// 완화가 아니라 설계 의도의 반전이다 — 그 순간을 자각하라고 만든 테스트가 제 역할을 했다.
+describe('자세 동요가 정지를 실제로 가린다 (4단계)', () => {
+  it('본 축마다 최대 각속도가 인지 문턱 이상', () => {
+    for (const key of Object.keys(DRIFT)) {
+      expect(driftPeakSpeed(key)).toBeGreaterThanOrEqual(STILL_THRESHOLD);
+    }
+  });
+
+  it('sine 하나로는 부족하다 — 축마다 2성분 이상이어야 한다', () => {
+    // 단일 sine 은 반주기마다 속도가 0을 지나 정지 구간이 남는다. 성분이 2개 이상이고
+    // 주파수가 서로 다를 때만 속도 0 지점이 어긋나 합이 문턱 위에 머문다.
+    for (const [key, comps] of Object.entries(DRIFT)) {
+      expect(comps.length, key).toBeGreaterThanOrEqual(2);
+      const freqs = new Set(comps.map(([f]) => f));
+      expect(freqs.size, key).toBe(comps.length);
+    }
+  });
+
+  it('대상 밖 본은 조용히 0 (손목·얼굴)', () => {
+    // 손목은 상완 동요가 FK 로 전달되고, 얼굴은 표정 이벤트와 동기돼야 한다
+    expect(driftAt('handL.z', 3.3)).toBe(0);
+    expect(driftAt('blink', 3.3)).toBe(0);
   });
 });
