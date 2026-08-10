@@ -7,7 +7,6 @@
 // 반대로 **조이는 것도 의무가 아니다** — 아래 예산 블록의 '가드레일이지 래칫이 아니다' 참조.
 //
 // 남은 조이기:
-//   3단계(본 커버리지)   → DRIVEN_BONES 12 이상
 //   4단계(연속 신호화)   → WORST_STILL 1.0
 //
 // ⚠️ 판정은 **다중 시드 평균**(profileMean)으로 한다. 단일 시드는 난수 소비량이 달라지는 변경에
@@ -20,7 +19,7 @@ import {
   profileMean,
   STILL_THRESHOLD,
 } from './motionProfile';
-import { DRIFT, DRIFT_AMP } from './channels';
+import { DERIVE_OFF, DRIFT, DRIFT_AMP } from './channels';
 
 const MINUTES = 3; // 시드당 시뮬 길이
 
@@ -30,8 +29,14 @@ const MINUTES = 3; // 시드당 시뮬 길이
 // ⚠️ **예산은 가드레일이지 래칫이 아니다.** 매 단계 실측값에 바짝 붙여 조이지 말 것 — 3·4단계는
 // 이 수치들을 정당하게 바꾸는 작업이라, 여유 없는 예산은 회귀를 잡는 대신 기능 구현을 막는다.
 // 조이는 건 그 단계의 **완료 기준으로 명시된 항목**에 한한다(아래 '남은 조이기').
-const BURST_TOP5 = 0.35; // 총 회전량 중 상위 5% 프레임 비중 상한 (2단계 후 0.319)
-const DRIVEN_BONES = 7; // 구동 본 수 하한 (3단계에서 늘어난다)
+const BURST_TOP5 = 0.35; // 총 회전량 중 상위 5% 프레임 비중 상한 (3단계 후 0.316)
+
+// 구동 본 수 하한. 3단계 실측은 11 이지만(파생 본 Neck·UpperChest·양 Shoulder 추가) **예산은
+// 안 조인다** — 가드레일이지 래칫이 아니다. 여기를 11 로 박으면 이후 단계가 파생 계수를
+// 정당하게 조정할 때(예: 어깨 몫을 줄여 한 본이 문턱 아래로 내려갈 때) 회귀가 아닌 일로
+// 예산과 싸우게 된다. 계획서의 목표 12 는 미달인데, 상반신에 남은 본이 손목뿐이라
+// 3단계 범위의 천장이 11 이다(손목은 idle 미사용 + 손인사 프로브 경로, Hips/다리는 범위 밖).
+const DRIVEN_BONES = 7;
 
 // 구동 본 최대 각속도 상한 deg/s (2단계 후 103.7).
 // ⚠️ 이 예산이 dt 축소의 천장이다 — 최대 속도는 대략 1/dt 로 오른다. 5단계 2차 폴리싱에서 dt 를
@@ -44,6 +49,11 @@ const PEAK_SPEED = 120;
 // 20 은 리드인 보간 결함이 만든 속도 스파이크가 정지 카운터를 리셋한 착시 위에 세운 값이었고,
 // 실제로는 그때도 `elbowR.z` 가 22초에 걸쳐 총 1.44°(평균 0.213°/s, 문턱의 절반)만 기고 있었다.
 // 이후 5단계(delay 축소)로 23 → 16 으로 되돌렸다.
+//
+// ⚠️ 3단계부터 이 지표는 **이전 단계와 직접 비교하면 안 된다** — 측정 대상 본이 9 → 13 으로
+// 늘었고(파생 본), 분배 때문에 본별 진폭도 의도적으로 줄었다(같은 총 회전을 여러 관절이 나눔).
+// 새 본은 원 본의 정지 패턴을 물려받으므로 최장 정지가 늘어나는 게 정상이다(3단계 후 13.30).
+// 정지 자체를 없애는 건 4단계(연속 신호화)의 일이다.
 const WORST_STILL = 16;
 
 describe('절차 모션 프로파일', () => {
@@ -75,6 +85,24 @@ describe('절차 모션 프로파일', () => {
 
   it(`구동 본 ≥ ${DRIVEN_BONES}`, () => {
     expect(profile.drivenBones).toBeGreaterThanOrEqual(DRIVEN_BONES);
+  });
+});
+
+// 파생 계수 0 = 파생 없음. **구조**만 단정한다 — 수치를 박으면 이후 단계가 루프/드리프트를
+// 정당하게 바꿀 때 회귀가 아닌데도 여기서 걸린다(예산과 같은 이유). 계수 0 일 때 원 경로가
+// 산술적으로 동일하다는 건 channels.test.ts 가 단위로 고정한다.
+describe('본 파생 off = 기존 경로 (비퇴행)', () => {
+  const off = profileMean(BUDGET_SEEDS, {
+    minutes: MINUTES,
+    derive: DERIVE_OFF,
+  });
+
+  it('파생 본이 프로파일에 아예 안 나타난다', () => {
+    const names = off.bones.map((b) => b.bone);
+    expect(names).not.toContain('Neck');
+    expect(names).not.toContain('UpperChest');
+    expect(names).not.toContain('LShoulder');
+    expect(names).not.toContain('RShoulder');
   });
 });
 

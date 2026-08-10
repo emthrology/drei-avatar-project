@@ -14,7 +14,12 @@
 // 표정은 이벤트 동기가 정답이라 '멈춤'이 결함이 아니다.
 
 import { AnimScheduler, type MotionConfig, type StateName } from './scheduler';
-import { BASELINE, CHEST_INHALE_SCALE, driftAt } from './channels';
+import {
+  BASELINE,
+  boneEulers,
+  DERIVE_DEFAULT,
+  type DeriveConfig,
+} from './channels';
 import { MOODS } from './moods';
 
 /** 이 속도 아래는 화면에서 '멈춘 것으로 보인다'고 간주 (deg/s).
@@ -50,6 +55,8 @@ export interface ProfileOptions {
   mood?: string;
   state?: StateName;
   motion?: MotionConfig;
+  /** 본 파생 계수. 기본은 useAnimator 가 실제로 켜는 값 — 프로파일은 출하 구성을 재야 한다 */
+  derive?: DeriveConfig;
   seed?: number;
 }
 
@@ -99,12 +106,16 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-// 채널 → 논리 본. 채널 이름 규약(`<본>.<축>`)에서 **파생**한다 — channels.ts 의 본 목록을
-// 복사해 오면 채널이 늘 때 사본만 조용히 낡는다.
+// boneEulers 본 키 → 표시 이름. 얼굴 채널(blink/emo.*)은 boneEulers 가 아예 안 내보내므로
+// 여기서도 자동 제외된다(표정은 이벤트 동기가 정답이라 '멈춤'이 결함이 아니다).
 const BONE_LABEL: Record<string, string> = {
   head: 'Head',
+  neck: 'Neck',
   chest: 'Chest',
+  upperChest: 'UpperChest',
   spine: 'Spine',
+  shoulderL: 'LShoulder',
+  shoulderR: 'RShoulder',
   armL: 'LUpperArm',
   armR: 'RUpperArm',
   elbowL: 'LLowerArm',
@@ -113,16 +124,6 @@ const BONE_LABEL: Record<string, string> = {
   handR: 'RHand',
 };
 
-function boneOf(ch: string): string | null {
-  const prefix = ch.slice(0, ch.indexOf('.'));
-  return BONE_LABEL[prefix] ?? null; // blink·emo.* → null (얼굴 제외)
-}
-
-// 채널값을 본 회전 라디안으로 환산. chest.inhale 만 apply() 에서 스케일되므로 동일하게 반영.
-function toRadians(ch: string, v: number): number {
-  return ch === 'chest.inhale' ? v * CHEST_INHALE_SCALE : v;
-}
-
 export function profileIdle(opts: ProfileOptions = {}): MotionProfile {
   const {
     minutes = 5,
@@ -130,13 +131,15 @@ export function profileIdle(opts: ProfileOptions = {}): MotionProfile {
     mood = 'neutral',
     state = 'idle',
     motion = { overlap: 35, smooth: 0.7 },
+    derive = DERIVE_DEFAULT,
     seed = 1,
   } = opts;
 
   const dtMs = 1000 / fps;
   const frames = Math.round(minutes * 60 * fps);
   const realRandom = Math.random;
-  const series: Record<string, number[]> = {};
+  // 본별 오일러 시계열 [x[], y[], z[]]
+  const series: Record<string, [number[], number[], number[]]> = {};
 
   try {
     Math.random = mulberry32(seed);
@@ -148,10 +151,13 @@ export function profileIdle(opts: ProfileOptions = {}): MotionProfile {
     for (let i = 0; i < frames; i++) {
       const out = scheduler.tick(dtMs);
       t += dtMs / 1000;
-      for (const [ch, v] of Object.entries(out)) {
-        if (!boneOf(ch)) continue;
-        // micro-drift 는 apply 레이어라 스케줄러 출력에 없다 → 같은 함수로 재현
-        (series[ch] ??= []).push(toRadians(ch, v) + driftAt(ch, t));
+      // 채널→본 변환(micro-drift·파생 포함)은 apply() 와 **같은 함수**를 쓴다. 모델이 없는
+      // 헤드리스라 파생 본은 전부 존재한다고 본다(컨벤션 락 BASE_SPEC 54본 기준).
+      for (const [bone, e] of Object.entries(boneEulers(out, derive, t))) {
+        const s = (series[bone] ??= [[], [], []]);
+        s[0].push(e[0]);
+        s[1].push(e[1]);
+        s[2].push(e[2]);
       }
     }
   } finally {
@@ -160,12 +166,15 @@ export function profileIdle(opts: ProfileOptions = {}): MotionProfile {
 
   // 본별 프레임 각속도 (축 델타 제곱합의 제곱근)
   const sq: Record<string, number[]> = {};
-  for (const [ch, arr] of Object.entries(series)) {
-    const bone = boneOf(ch)!;
-    const acc = (sq[bone] ??= new Array(arr.length - 1).fill(0));
-    for (let i = 1; i < arr.length; i++) {
-      const d = arr[i] - arr[i - 1];
-      acc[i - 1] += d * d;
+  for (const [bone, axes] of Object.entries(series)) {
+    const acc = (sq[BONE_LABEL[bone] ?? bone] = new Array(
+      axes[0].length - 1,
+    ).fill(0));
+    for (const arr of axes) {
+      for (let i = 1; i < arr.length; i++) {
+        const d = arr[i] - arr[i - 1];
+        acc[i - 1] += d * d;
+      }
     }
   }
 
