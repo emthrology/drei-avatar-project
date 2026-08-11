@@ -133,7 +133,7 @@ export function useAnimator(
       builtVrmRef.current = vrm;
       // 자연스러움 레이어 활성: 몸통→팔→손 시차(overlap) + 본 채널 부드러운 정착(smooth,
       // smootherstep). 오버슈트/anticipation은 '각진·군인' 느낌이라 미채택. 얼굴(blink/emo.*)은
-      // 표정 동기 위해 미적용. 상세 docs/motion-naturalness-plan.md
+      // 표정 동기 위해 미적용. 불변식은 CLAUDE.md 「모션 레이어 = 데이터 무변경 소급 적용」
       const scheduler = new AnimScheduler(BASELINE, {
         overlap: 35,
         smooth: 0.7,

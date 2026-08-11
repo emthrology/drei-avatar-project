@@ -27,7 +27,7 @@ VRoid VRM 아바타를 불러와 MToon 셰이더로 파츠/색상을 실시간 �
 
 **Vite 필수** — R3F 생태계 표준, CRA 사용 금지.
 **Three.js v0.170.x** — @pixiv/three-vrm 3.x 호환 버전.
-**R3F v8 train 고정** — React 18 → @react-three/fiber v8 → drei v9. v9(React 19)로 안 올림(이득 없음, three-vrm은 양쪽 호환). 포스트프로세싱도 v8 호환 `@react-three/postprocessing@2.17` 핀. 상세 [docs/shader-features-plan.md](docs/shader-features-plan.md).
+**R3F v8 train 고정** — React 18 → @react-three/fiber v8 → drei v9. v9(React 19)로 안 올림(이득 없음, three-vrm은 양쪽 호환). 포스트프로세싱도 v8 호환 `@react-three/postprocessing@2.17` 핀 — **최신 v3는 R3F v9(React 19) 요구**라 올리면 기차가 깨진다.
 
 ## 현재 프로젝트 구조
 
@@ -154,7 +154,9 @@ ShaderPanel은 슬라이더로 `store.shader`만 갱신. **실제 씬 머티리�
 - `outlineWidthFactor` — 외곽선 두께 (0~0.02)
 - `shadingToonyFactor` — 툰 경계 선명도 (0~1, 높을수록 명확한 경계)
 
-**rim 계열 제거됨** — MToon 핵심 아님 + 작은 오버레이서 인지 불가. emission/outline색/shadingShift도 모델 파싱 검증 후 폐기(원칙1·2 미달). 근거 [docs/shader-features-plan.md](docs/shader-features-plan.md).
+**rim 계열 제거됨** — MToon 핵심 아님 + 작은 오버레이서 인지 불가. emission/outline색/shadingShift도 모델 파싱 검증 후 폐기(원칙1·2 미달, 실측 근거는 메모리 [[shader-features-verified-findings]]).
+⚠️ **머티리얼 파라미터의 전역 덮어쓰기는 원칙1 위반이다** — VRoid는 값을 **파츠별로 다르게 저작**한다(outline색: 머리카락만 청록 `[0.157,0.408,0.35]` / shadingShift: face 0.9 ~ tops −0.35). 전역 슬라이더는 이 authored 값을 뭉갠다. 새 MToon 파라미터를 노출하려면 **파츠별 + 실제값을 디폴트로 읽기**(`collectMeshInfos` 패턴)여야 한다.
+📌 **미해결(기존 부채)**: 현 ShaderPanel의 전역 `toony=0.9` 디폴트가 로드 시 tops(0.35)·hair(0.8) authored 값을 덮어쓴다 = 약한 원칙1 위반. 셰이더 패널을 손볼 때 "실제값 디폴트 읽기"로 교정 가능.
 **조명·톤은 별도 레이어**: 조명=LightPanel/SceneLights(`store.lighting`), 사진편집식 톤=컬러 그레이딩 포스트프로세싱(GradingPanel/GradingEffects, `store.grading` — 모델 비훼손 화면 레이어).
 
 ## 컴패니언 모드
@@ -177,7 +179,7 @@ window.dispatchEvent(
 
 - 호흡(`chest.inhale`) / 머리 미동(`head.rotate*`, 가끔 둘러보기) / 눈깜빡임
 - 포즈(`spine.*` 체중이동 + 둘러보기 alt) — Head/팔 FK 상속
-- **armPose 팔**: 차렷+미세이동 / 허리짚기 / 뒷짐. 발화 시 rest로 양보(제스처가 팔 소유). 상세 [docs/idle-arm-plan.md](docs/idle-arm-plan.md)
+- **armPose 팔**: 차렷+미세이동 / 허리짚기 / 뒷짐 / 앞으로모으기. 발화 시 rest로 양보(제스처가 팔 소유) — 불변식은 아래 「idle 팔 포즈」
 
 옛 useIdleAnimation(slerp 기반)은 폐기 — 위 선언적 스케줄러로 흡수.
 
@@ -228,44 +230,34 @@ VRM 로드 흐름(업로드 오버라이드): 파일 선택 → `URL.createObjec
 
 ## 구현 로드맵
 
-- [x] Phase 1: Vite + R3F + drei 세팅, VRM 로딩 (@pixiv/three-vrm), OrbitControls, 명시적 조명
-- [x] Phase 2: 머티리얼 색상 변경 (Zustand), 파츠 show/hide (meshInfos), MToon litColor/shadeColor
-- [x] Phase 3: MToon 셰이더 파라미터 UI (outlineWidthFactor, rim, shadingToony)
-- [x] 컴패니언 모드: 게임 이벤트 반응, 말풍선, Google TTS, 립싱크, 숨쉬기+눈깜빡임
-- [x] 컴패니언 DebugPanel: 5173 UX 포팅, VRM 직접 로드 (blob URL)
-- [x] 버그 수정: TTS API 키, 카메라 상반신 프레이밍, idle 애니메이션 가시성
-- [x] **TalkingHead 포팅 A+D 단계 완료** (시선/사케이드, 합성 viseme 립싱크)
-- [x] **TalkingHead 포팅 B+C+E 단계 완료** (애니메이션 스케줄러, 포즈 전환, 발화 제스처)
-- [x] **제스처/idle 폴리싱** (적극적 idle, 제스처 10종, DebugPanel 수동 트리거, 전역 편안한 손, z-index 수정)
-- [x] **무드 시스템 확장 1~4단계 완료** — 무드 5종(neutral/happy/sad/surprised/angry). 게임 이벤트별 표정 전환(`emo.*` 채널→preset emotion) + 무드별 제스처 톤. 발화 후 neutral decay. DebugPanel 무드/표정 버튼. 상세 [docs/mood-plan.md](docs/mood-plan.md)
-- [x] **무드 변별/품질 폴리싱** — sad/angry는 눈썹 부위 모프(`Fcl_BRW_*`) 강조로 구분. surprised는 입벌림 gasp 일회성(발화 viseme와 분리). 표정↔립싱크 입 충돌 검증(가산·비파괴 확인)
-- [x] **happy 눈매 폴리싱 (얼굴 인지 + 일회성 분해)** — ①VRoid `Fcl_ALL_Joy` 속 눈웃음(`Fcl_EYE_Joy`)이 일부 얼굴(female)에선 눈을 덜 감게 저작됨 → 보이는 얼굴의 모프 정점 변위를 측정해 부족분만큼 `Fcl_EYE_Close`를 가산(목표 비율 0.62, male류는 boost=0 비퇴행). 얼굴 교체마다 lazy 재산출(`channels.ts refreshHappyEye`). ②preset `happy`(입+눈+눈썹 결합) held → "말하는 내내 눈감김" → surprised gasp와 동형으로 분해: 입(`Fcl_MTH_Joy`)·눈썹(`Fcl_BRW_Joy`) held + 눈(`emo.eyeJoy`)은 진입 시 일회성 클립(`HAPPY_EYE`)이 감았다 뜸 → 발화 중 눈뜸 유지
-- [x] **TTS 성별 음성 선택** — VRM에 성별 필드 없음 → 에디터에서 수동 선택(`Gender` 토글). `TTS_CONFIG`를 lang×gender로 확장
-- [x] **에디터 조명 컨트롤 + 공유 SceneLights** — `store.lighting`로 에디터/컴패니언 조명 공유, LightPanel 슬라이더(환경광/메인광 강도·각도). rim 제거
-- [x] **컬러 그레이딩 (포스트프로세싱)** — 사진편집식 톤(밝기/대비/색조/채도). EffectComposer 화면 레이어(모델 비훼손), 에디터·컴패니언 `store.grading` 공유. emission/outline색/shadingShift는 모델 검증 후 폐기 ([docs/shader-features-plan.md](docs/shader-features-plan.md))
-- [x] **idle 자연스러운 팔 동작 (FK)** — armPose 루프(허리짚기/뒷짐/미세 무게이동) + 몸통 둘러보기. IK는 보류 ([docs/idle-arm-plan.md](docs/idle-arm-plan.md))
-- [x] **에디터 = 에셋 조립 (avatar-composer 흡수)** — 임의 VRM 업로드 폐기(authored-only). 에디터가 `CHARACTERS[]`(남자1/여자1) base + 모듈 파츠 카탈로그 조립으로 전환. `src/editor/`(constants/partLoader/ComposerAvatar/EditorScene/ui). 좌측 카탈로그 피커(face/hair/tops/bottoms 스왑) + 우측 공유 설정(색/셰이더/조명/톤). seam: 파츠 교체 후 `meshInfos` 재수집 → 색/셰이더 패널이 새 파츠 인지. composer 정책(유휴시선/wave/더미)은 벗기고 drei 정책(restpose/프레이밍) 주입. PoC 모드·AvatarScene·VRMAvatar 제거. (composer `INTEGRATION.md`/`INTEGRATION_GAP.md`)
-- [x] **컴패니언 = 에디터 조립 아바타 공유** — 조립 엔진을 `useAssembledVrm` 훅으로 추출(ComposerAvatar·CompanionAvatar 공유). 컴패니언이 `store.characterId/selection/eyeColor`로 base+파츠를 동일 조립 → 에디터에서 조합한 결과가 그대로 보임. 컴패니언 립싱크/anim/시선은 조립 위에 얹음(faceRef.sync로 얼굴교체도 표정 미러). DebugPanel 업로드는 `catalog=[]` 단일 VRM 오버라이드로 잔류
-- [x] **오프라인 파이프라인 이식 (Phase 7)** — `scripts/extractParts.mjs`(VRoid 소스→파츠 GLB/VRM raw 수술+prune) + `renderThumbs.mjs`(puppeteer로 `?thumb=` 단독 렌더 스냅샷) + `ui/ThumbScene.tsx` + `main.tsx` `?thumb=` 분기·`window.__CATALOG`. devDeps(@gltf-transform/core·functions, puppeteer) + `npm run assets`(extract→thumbs)/`extract`/`thumbs`. **extract·thumbs 둘 다 byte-deterministic 재생성 검증**. ⚠️ `prebuild` 미추가 — `parts/` 소스가 gitignore라 Vercel 빌드선 추출 불가(런타임 산출물 커밋으로 충당)
-- [x] **무드 5단계 — 루프 톤 분기** — happy=활발한 머리/호흡(템포↓·진폭↑), sad=느린 미동(템포↑·진폭↓). 스케줄러 자체엔 `moodName` 차원을 안 넣음 — `moods.ts`의 `scaleTemplate()`가 호흡/머리/포즈 템플릿을 무드별 톤(tempo/amplitude)으로 재귀 스케일해 `loopsForMood()`가 조립, `useAnimator`가 무드 전환 시 `TONE_LOOP_NAMES` 3종만 remove/재add(hold-last로 스냅 없음). neutral은 스케일 1×라 원본 객체 그대로 반환(참조 동일 = 비퇴행). armPose/blink는 이번 범위 밖(무드 무관 공유 유지)
-- [x] **drei 로딩 인디케이터 + 컴패니언 FPS 적응형 DPR** — 에디터: 12MB VRM 로딩 중 `useProgress()` % 를 Suspense fallback으로 표시. 컴패니언: `<PerformanceMonitor>`를 `setDpr`에 직접 연결(`DprGovernor`)해 FPS 하락 시 오버레이 해상도를 낮춰 **게임 프레임 보호**, 회복 시 복원. ⚠️ drei `<AdaptiveDpr>`는 OrbitControls 없는 이 캔버스에서 `performance.regress()`가 안 불려 **무동작** → 콜백 직결 방식으로 대체
-- [x] **모션 자연스러움 — 탈로봇 (overlap/smootherstep + micro-drift + idle 다양화)** — 3단계. ①`scheduler.ts` `MotionConfig{overlap,smooth}`(기본 0=off, 바이트 동일): 채널 운동학적 깊이(torso 0→arm/head 1→elbow 2)만큼 시작 시각을 미뤄 몸통→팔→손 시차 + 본 채널 이징을 smootherstep로 블렌드. **오버슈트는 시도 후 반려**("각진 군인" 피드백) → `moods.ts` 데이터 무변경으로 전 클립 소급 적용. ②`channels.ts` micro-drift: 초저주파 sine을 apply-레이어에서 가산해 hold 구간 "얼어붙음" 제거. ③`IDLE_ARM_POSES`에 앞으로모으기 추가 + 차렷 확률 0.72→0.55(팔짱·한손잡기는 클리핑으로 반려). 상세 [docs/motion-naturalness-plan.md](docs/motion-naturalness-plan.md) · 보류 기록 [docs/wave-gesture-attempts.md](docs/wave-gesture-attempts.md)
+> 완료 항목은 **무엇을 했는지가 아니라 다음 판단에 필요한 것만** 남긴다(문서 작성 기준 ⓐ — 경위는 `git log`). 재시도를 막아야 하는 반려·함정은 아래 「불변식」 절로 승격돼 있다.
+
+- [x] Phase 1~3: Vite + R3F + drei · VRM 로딩(@pixiv/three-vrm) · 머티리얼 색상/파츠 show-hide(meshInfos) · MToon 셰이더 파라미터 UI
+- [x] 컴패니언 모드 + DebugPanel — 게임 이벤트 반응, 말풍선, Google TTS, 립싱크, idle 애니메이션
+- [x] TalkingHead 포팅 A~E 전 단계 — 시선/사케이드 · 합성 viseme 립싱크 · 애니메이션 스케줄러 · 포즈 전환 · 발화 제스처 10종 · 전역 편안한 손
+- [x] **무드 시스템 5종** (neutral/happy/sad/surprised/angry) — 이벤트별 표정 전환(`emo.*`→preset) + 제스처 톤 + 루프 톤 분기 + 발화 후 neutral decay. 변별 폴리싱(sad/angry 눈썹 모프 · surprised 입벌림 gasp · happy 눈매 일회성 분해). 표정↔립싱크 입 충돌은 **가산·비파괴로 검증됨**
+- [x] TTS 성별 음성 선택 (VRM에 성별 필드가 없어 에디터 수동 선택, `TTS_CONFIG`=lang×gender) · 에디터 조명 컨트롤(공유 `SceneLights`) · 컬러 그레이딩 포스트프로세싱
+- [x] **idle 자연스러운 팔 동작 (FK)** — armPose 루프(차렷/허리짚기/뒷짐/앞으로모으기) + 몸통 둘러보기. IK는 보류
+- [x] **에디터 = 에셋 조립 (avatar-composer 흡수)** — 임의 VRM 업로드 폐기(**authored-only**). `CHARACTERS[]` base + 모듈 파츠 카탈로그 조립(`src/editor/`). 컴패니언도 같은 `useAssembledVrm`을 써서 에디터 조합 결과가 그대로 보인다(DebugPanel 업로드만 `catalog=[]` 오버라이드로 잔류)
+- [x] **오프라인 에셋 파이프라인** — `npm run assets`(extractParts→renderThumbs). **extract·thumbs 둘 다 byte-deterministic 재생성 검증됨** → 산출물이 의심스러우면 지우고 다시 돌려도 안전
+- [x] **drei 로딩 인디케이터 + 컴패니언 FPS 적응형 DPR**(`DprGovernor` — FPS 하락 시 오버레이 해상도를 낮춰 게임 프레임 보호)
+- [x] **모션 자연스러움 — 탈로봇** (overlap/smootherstep + micro-drift + idle 자세 다양화)
 - [ ] **후속: IK 도입** — 손이 보이는 제스처(손가슴 등) 정밀화. CCDIKSolver 채널 추상화. 상세 [docs/ik-plan.md](docs/ik-plan.md)
-- [ ] **▶ 진행 중: 절차 레이어 리뉴얼 (VRMA 대비 부드러움 격차)** — 브랜치 `feat/motion-renewal`. 계획·실측 [docs/motion-renewal-plan.md](docs/motion-renewal-plan.md)
-  - **진단으로 우선순위가 뒤집혔다**(2026-08-06): 1순위는 본 커버리지가 아니라 **[scheduler.ts:267](src/companion/anim/scheduler.ts#L267) 보간 결함**이다. `null` 시작값을 매 프레임 `live`에서 다시 읽어 보간이 저역통과 **필터**가 된다 → 명목 1.0s 전환이 실제 0.48s에 완주, 피크 속도가 30% 지점, **프레임레이트 종속**, 그리고 **`smooth:0.7`(smootherstep) 투자가 사실상 무효화**. `head`·`pose`·`armPose` 루프는 dt 세그먼트가 1개뿐이라 100% 이 경로
-  - **실측 대조**(헤드리스 5분 idle vs VRMA_03): 구동 본 7/52 vs 51/52 · 본별 최장 정지 **14.5s vs 0.29s** · 총 회전량 중 상위 5% 프레임 비중 **65.5% vs 31.6%**. Spine 평균 각속도는 2.38 vs 2.02°/s로 오히려 우리가 크다 → **진폭이 아니라 분포 문제**
-  - **단계**: 0 측정 하네스(`npm run motion:stat`) ✅ → 1 보간 수정 ✅ → 2 `armRelaxed` 분포 ✅ → 5 타이밍 폴리싱 1차 ✅ → 3 본 커버리지 ✅(구동 본 7→11) → 4 연속 신호화 ✅(2026-08-10, 자세 동요 — 본별 정지 비율 52~~76%→10~~30%로 **VRMA 대역 진입**) → **▶ 다음: 5 폴리싱 2차 — 육안 게이트 2개**(①4단계 부유감 여부 ②idle 이 여전히 느린가. 둘 다 수치로 못 잡는다)
-  - ⚠️ **overlap 시차는 원인이 아니다** — VRMA 근위→원위 시차를 상호상관으로 재보니 클립마다 −33ms\~+1000ms로 일관성 없음(식별 불가) → 현행 35ms 유지, 건드리지 말 것
-  - ⚠️ **신규 본 = VRMA 레이어 회귀 위험** — 새 본을 채널이 소유하면 「소유 판별」결과가 바뀐다(복귀 목표 rest0→live) → VRMA 손인사 복귀 재검증. 범위 밖: Hips/다리는 아래 별도 항목
-- [ ] **후속: 하반신 무게이동** — 현 `pose` 루프는 Spine만 회전(액티브함 구조적 천장). Hips/UpperLeg/LowerLeg 축 검증 후 `hips.*`/`knee.*` 채널 신설. 신규 본/채널 회귀 위험으로 보류 ([docs/motion-naturalness-plan.md](docs/motion-naturalness-plan.md) 4번)
-- [x] **손인사(wave) — 완료** (2026-08-04) — FK 5회 실패 후 보류했다가 **검증 방식을 바꿔** 재개해 완료. 양 캐릭터에서 프로브 6개 지표 전부 PASS. 푼 열쇠 2개: ①**흔들기를 손목으로 이관** → `armR.y`(상완 롤)가 자세 전용으로 free 해져 커플링 해소 ②**육안 → 수치 검증**. 부산물: `handR.*`·`*.twist` 채널 신설, 프로브 지표 3종 추가(몸통이격·손바닥 바깥/정면), `--char`/`--wave`/`--wait` 플래그, 필름스트립 [scripts/waveShots.mjs](scripts/waveShots.mjs). **임계값은 하나도 안 바꿨다**(바꾼 건 측정 지점·구간뿐). 상세 [docs/wave-gesture-attempts.md](docs/wave-gesture-attempts.md)
-- [x] **VRMA(표준 모션 포맷) 도입 — 손인사 교체 완료** (2026-08-05) — 판정 2기준(ⓐ자연스러움 ⓑ확장성) 모두 통과. `@pixiv/three-vrm-animation@3.5.3` + `src/companion/anim/vrma/`(카탈로그·재생 레이어). **새 동작 추가 = 파일 떨구고 카탈로그 1줄**(euler 튜닝 없음), 같은 파일이 남자1·여자1 무수정 동작. ⚠️ **부분 추출 금지**(부위 마스킹·상대 모드·가중치 축소 전부 시도 후 반려 — 모션은 전신이 함께 움직인다는 전제로 저작돼 일부만 쓰면 더 어색해진다) → 전신을 쓰되 **가장 정적인 클립**을 고른다. 손인사는 VRMA_03(정적임 실측 최소)을 [scripts/makeWaveVrma.mjs](scripts/makeWaveVrma.mjs)로 개조한 `wave.vrma`(= 우리가 만든 첫 .vrma). 조달 경로·함정 [docs/vrma-adoption.md](docs/vrma-adoption.md)
-- [x] **인사(greet) = 손인사 + happy 합성** (2026-08-10) — 컴패니언 진입 시 1회 자동 재생. **새 `.vrma` 파일 0개** — `VrmaClipDef.mood` 로 본(VRMA)과 표정(무드)을 겹친 구성이다. 표정을 파일에 굽지 않는다는 원칙의 실익이 여기서 나옴(구우면 무드마다 파일이 하나씩 필요). DebugPanel `😊 인사(등장)` 버튼이 같은 경로를 쏜다. ⚠️ `npm run verify` 의 wave 프로브는 계속 `VRMA_WAVE`(무드 없음)를 잰다 — 본 트랙이 동일하므로 수치도 동일하고, 표정이 섞이지 않아 회귀 감시가 더 깨끗하다
+- [x] **절차 레이어 리뉴얼 (VRMA 대비 부드러움 격차)** (2026-08-06~10, 0~4단계) — 진단으로 우선순위가 뒤집힌 라운드다: 1순위는 본 커버리지가 아니라 **스케줄러 리드인 보간 결함**이었다(불변식은 [scheduler.ts](src/companion/anim/scheduler.ts) 주석에 실측째로 박혀 있다). 측정 하네스(`npm run motion:stat`) → 보간 수정 → `armRelaxed` 분포 → 타이밍 1차 → 본 커버리지(구동 본 7→11) → 자세 동요 순. 결과 **본별 정지 비율 52~76% → 10~30%로 VRMA_03 대역(6~31%) 진입**
+- [ ] **보류: 리뉴얼 5단계 2차 — 속도·타이밍 폴리싱** — 4단계까지 끝낸 뒤 **육안 게이트 2개**가 남았고, 둘 다 수치로 못 잡아 사람이 봐야 한다: ①4단계 자세 동요로 **부유감**(물 위에 뜬 느낌)이 나는가 ②idle 이 여전히 느린가(1단계 보간 수정으로 전환이 명목 duration을 다 쓰게 되어 실제 2배 길어졌다). 재개 시 필요한 것:
+  - **레버는 `dt` 가 아니라 `delay` 다** — 실측상 `delay`(1.5~6s)가 `dt`(0.8~4s)보다 길다. `delay` 축소는 전환 곡선을 안 건드려 **1단계에서 얻은 부드러움을 안 깎고** 최대 각속도도 안 올린다. 1차에서 이미 이 레버로 버스트 상위5% 35.0→30.5%(VRMA 31.6% 상회)
+  - **`dt` 축소는 천장이 가깝다** — 최대 각속도가 예산의 95%. 걸리면 예산을 완화하지 말고 '왜 더 빨라야 하는가'를 먼저 답할 것([motionProfile.test.ts](src/companion/anim/motionProfile.test.ts)에 이력째 기록)
+  - 부유감이 나면 `DRIFT_AMP`를 0으로 내려 격리한 뒤 **진폭부터** 낮춘다(속도가 아니라)
+  - `dt`/`delay` 는 `moods.ts` 의 숫자일 뿐 구조가 아니다 — **언제든 한 줄로 바뀌므로 미뤄도 잃는 게 없다**
+- [ ] **후속: 하반신 무게이동** — 현 `pose` 루프는 Spine만 회전(액티브함 구조적 천장). Hips/UpperLeg/LowerLeg 축을 시각 검증한 뒤 `hips.*`/`knee.*` 채널 신설: 한 다리에 체중 → Hips 좌우 이동+회전, 반대 무릎 살짝 굽힘, Spine 보상, `pose` 루프와 연동. FK로 충분(IK와 별개). **신규 본/채널이라 VRMA 「소유 판별」 회귀 위험** → 보류 중
+- [x] **손인사(wave)** (2026-08-04) — FK 5회 실패 후 **육안→수치 검증(프로브)으로 바꿔** 완료. 부산물: `handR.*`·`*.twist` 채널, 프로브 지표 9종, `npm run probe` 플래그류. 이후 VRMA판으로 교체됨(절차판은 `companion:wave-proc` 기준선으로 잔류). 실패 5건의 재현·규율 [docs/wave-gesture-attempts.md](docs/wave-gesture-attempts.md)
+- [x] **VRMA(표준 모션 포맷) 도입** (2026-08-05) — `@pixiv/three-vrm-animation` + `src/companion/anim/vrma/`. **새 동작 추가 = 파일 떨구고 카탈로그 1줄**(euler 튜닝 없음), 같은 파일이 양 캐릭터 무수정 동작. 손인사는 VRMA_03을 개조한 `wave.vrma`. 조달 경로·함정 [docs/vrma-adoption.md](docs/vrma-adoption.md) — **새 동작 추가 전 필독**
+- [x] **인사(greet) = 손인사 + happy 합성** (2026-08-10) — 컴패니언 진입 시 1회 자동. **새 `.vrma` 파일 0개**(`VrmaClipDef.mood`로 본=VRMA / 표정=무드를 겹침)
 - [ ] **후속: `moods.ts` 분할** (747줄, 2026-08 기준) — 루프·idle포즈·제스처·타입·MOODS조립 5종 혼재로 응집 낮음. `anim/poses.ts`(idle 3종) / `anim/gestures.ts` / `moods.ts`(타입+톤+조립)로 **순수 이동 먼저**, 로직 변경은 다음 PR. **착수 시점은 다음 제스처/무드 추가 직전** — 지금은 안 아프므로 미리 건드리지 않는다(YAGNI). 현 구성은 `grep -n "^export" src/companion/anim/moods.ts`로 재확인
 - [ ] **후속: 테스트 확장** — 순수/준순수인데 미테스트: [store.ts](src/store.ts)(`setCharacter` 리셋·mesh patch) · [channels.ts](src/companion/anim/channels.ts)(채널→본 매핑 테이블) · [meshLabels.ts](src/editor/meshLabels.ts)(`LABEL_RULES` 매칭·fallback, 48줄 순수 규칙 = **최고 ROI**). `moods.ts` 분할 전 characterization으로 쓰면 일석이조
-- [x] **에디터 라이브 프리뷰** — 디버그 패널 없는 에디터에서 모션 확인. VRoid VRM엔 내장 클립이 없어 AnimationMixer 경로(빈 패널) 폐기 → 컴패니언과 동일한 절차 엔진(`useAnimator`) 재사용. `store.animPreview` 토글(기본 OFF=정적 편집 보존, 비퇴행), ON 시 ComposerAvatar가 idle 구동. AnimationPanel = 토글 + 무드/제스처/idle포즈 트리거(`companion:*` window 이벤트 공유, DebugPanel과 동일 경로). `useAnimator(…, enabled)` 4번째 인자로 게이팅
-- ❌ **폐기: Phase 4 스크린샷/내보내기** (2026-08-04 결정) — 초기 로드맵의 플레이스홀더 한 줄이 전부로, **명세된 적 없는 항목**이었다. 착수 전 해석을 4가지로 펼쳐 검토: A 캔버스 PNG 캡처 / B 조합 설정 JSON 저장·복원 / C 조립 VRM·GLB 익스포트 / D 컴패니언 투명 PNG. **전부 불필요 판정**. 근거: A·D는 OS 스크린샷으로 대체되고(차별점은 UI 없는 순수 렌더·DPR 고해상도·투명배경뿐인데 그 용도가 없음), C는 MToon·스프링본 보존 문제로 난이도만 높고 사용 맥락이 없으며, B는 아래 관찰에도 불구하고 요구되지 않음. **원칙②(실질 개선) 미달 → 안 만드는 것이 정답.** 오프라인 스크린샷이 필요하면 이미 있는 [scripts/renderThumbs.mjs](scripts/renderThumbs.mjs)(puppeteer + `?thumb=`) 경로를 쓴다.
-  - 📌 **부수 관찰(미해결로 남김)**: 영속성이 전무하다(`persist`/`localStorage` grep 0건). 새로고침하면 파츠 조합·메시별 색·셰이더·조명·그레이딩이 전부 초기값으로 소실된다. B가 이를 풀 수 있었으나 기능 자체가 불필요 판정이라 **의도적으로 남겨둔 상태**다. 향후 이 소실이 실제 불편으로 드러나면 그때 재검토(=신규 제안, 폐기 번복 아님).
+- [x] **에디터 라이브 프리뷰** — `store.animPreview` 토글(**기본 OFF = 정적 편집 보존**), ON 시 컴패니언과 동일한 절차 엔진(`useAnimator`)을 ComposerAvatar가 구동. AnimationPanel 트리거는 `companion:*` window 이벤트로 DebugPanel과 같은 경로. ⚠️ **AnimationMixer 경로는 반려됨** — VRoid VRM엔 내장 클립이 없어 패널이 빈다
+- ❌ **폐기: Phase 4 스크린샷/내보내기** (2026-08-04) — 명세된 적 없는 플레이스홀더. 해석 4안(캔버스 PNG · 설정 JSON 저장 · VRM/GLB 익스포트 · 투명 PNG) 전부 원칙②(실질 개선) 미달. **재개 트리거는 "미완 Phase"가 아니라 구체적 용도다** — 그때 신규 제안으로 다룬다. 오프라인 렌더만 필요하면 이미 있는 [scripts/renderThumbs.mjs](scripts/renderThumbs.mjs)(`?thumb=`) 재사용
+  - 📌 **미해결로 남긴 관찰**: 영속성 전무(`persist`/`localStorage` 0건) → 새로고침하면 파츠 조합·색·셰이더·조명·그레이딩이 전부 초기화된다. 위 폐기 판정에 따라 **의도적으로 남긴 상태**
 - 보류: per-제스처 손가락 매핑 — 300×400 프레임에선 지엽적이라 스킵 (전역 편안한 손으로 충분)
 
 ## TalkingHead 포팅 로드맵
@@ -316,7 +308,8 @@ VRM preset은 입 모양 5개(aa/ih/ou/ee/oh)지만, VRoid 모델의 추가 입 
 
 - **개발 원칙** (신기능 시 준수): ①비퇴행 — 기존 동작 feature를 저해 금지. ②실질 개선 — "개발만 하면 됨" 금지, 체감되는 개선이어야. (rim·emission 컷, 그레이딩 화면 레이어 채택, Phase 4 폐기가 이 원칙의 사례)
 - **문서 작성 기준** (docs/ 비대화 방지, 2026-08-04): ⓐ**git이 이미 기록한 것은 문서로 남기지 않는다** — 대체된 문서는 아카이브 배너보다 **삭제**가 낫다(`git log`에 있다). ⓑ**CLAUDE.md 한 줄로 들어가면 문서를 만들지 않는다** — 함정·불변식이 payload고 나머지는 서술이다. ⓒ`/project-methodology` **스킬 references와 중복되는 로컬 사본 금지**(스킬이 세션마다 원본을 싣는다). ⓓ판단 기준: "이 문서가 **다음 세션의 결정을 바꾸는가**?" 아니면 안 만들거나 버린다. ⓔ**새 문서는 이 파일에서 링크한다** — 미링크 문서는 새 세션이 발견하지 못해 사실상 없는 것과 같다
-- **현행 진단·계획 문서**: [docs/project-diagnosis-2026-08.md](docs/project-diagnosis-2026-08.md)(**⏳ 2026-08-31 만료 후 삭제** — 살아있는 할 일은 위 로드맵 `[ ]`로 이미 이전됨) · [docs/concepts.md](docs/concepts.md)(이 프로젝트에 쓰인 수학/3D 개념 설명)
+- **현행 문서 5개** (이게 전부 — 완료된 계획서는 삭제한다, 기준 ⓐ·ⓓ): 착수 전 필독 [docs/vrma-adoption.md](docs/vrma-adoption.md) · 재시도 차단 [docs/wave-gesture-attempts.md](docs/wave-gesture-attempts.md) · 미착수 설계 [docs/ik-plan.md](docs/ik-plan.md) · 이식 조사 [docs/tts-model-selection.md](docs/tts-model-selection.md) · 학습 자료 [docs/concepts.md](docs/concepts.md)
+  - **모션 계획서는 안 남긴다** — 절차 애니메이션의 함정·실측은 전부 **사용 지점 코드 주석**([scheduler.ts](src/companion/anim/scheduler.ts) 리드인 보간 · [motionProfile.ts](src/companion/anim/motionProfile.ts) 시드 스트림 · [motionProfile.test.ts](src/companion/anim/motionProfile.test.ts) 예산 규율 · [channels.ts](src/companion/anim/channels.ts) 파생 계수)과 위 불변식 절에 있다. 문서로 옮기면 코드와 어긋난다
 - **테스트 관례**: 소스 옆 `*.test.ts` 콜로케이션. vitest 심볼은 `import { describe, it, expect, vi } from 'vitest'`로 **명시**(전역 설정 없이 tsc 통과). 스케줄러는 `Math.random` 의존 → 테스트는 `vi.spyOn(Math,'random')` 고정 또는 스칼라(비-ranged) 클립으로 결정적 입력 사용. 대상은 순수 로직만(시각/렌더·React 글루는 수동 영역)
 - VRM CORS → `public/avatars/`에 위치시켜 same-origin 서빙
 - Three.js v0.170.x 고정 — drei v9, @pixiv/three-vrm v3 호환
@@ -347,6 +340,7 @@ VRM preset은 입 모양 5개(aa/ih/ou/ee/oh)지만, VRoid 모델의 추가 입 
   - 손가락 curl=proximal/intermediate `z`(좌−/우+). 전역 편안한 손은 `Channels` 생성 시 1회 설정(클립이 안 건드려 유지)
 - **카메라 상단**: 본 추정 금지 → `Box3.setFromObject(scene).max.y`(헤어 실제 끝). 머리 잘림 방지
 - **컴패니언 해상도**: 오버레이가 에디터보다 거칠어 보이는 건 **버그 아님** — 고정 300×400에 같은 아바타를 그려 백버퍼 픽셀이 ~3배 적고(dpr 동일), fov 28 클로즈업이 이를 증폭한다. 또렷하게 하려면 `<Canvas dpr={[1,2.5]}>`로 **상한만** 올린다 — `DprGovernor`가 `initialDpr × factor`로 계산하므로 거버너와 충돌하지 않고 맞물린다(여유 시 또렷 / 부하 시 자동 강하)
+  - ⚠️ **drei `<AdaptiveDpr>`는 이 캔버스에서 무동작** — `performance.regress()`를 부르는 주체가 OrbitControls인데 컴패니언엔 없다. 그래서 `<PerformanceMonitor>` 콜백을 `setDpr`에 직결한 `DprGovernor`로 대체했다. 성능 자동조절을 다시 손댈 때 `<AdaptiveDpr>`로 되돌리지 말 것
 - **이징**: 짧은 동작(제스처)은 `ease: 2.5~3.5`(완만), 기본(snap)은 blink/idle용. 각진 로봇 느낌은 ease 낮춰 해결
 - **손동작은 육안 아닌 수치로 검증** ([probe.ts](src/companion/anim/probe.ts) · `npm run probe`): 팔 기하를 **Hips 로컬**로 재서 술어 판정(흔들림 주축·상완 정지도·하완 전방·손 높이·상완 이격). 손인사 5회 실패가 전부 "덜렁덜렁" 같은 육안 표현이라 수렴 못한 데서 도입([docs/wave-gesture-attempts.md](docs/wave-gesture-attempts.md)). 값 바꾸고 `npm run probe -- --gesture <i>` 로 즉시 판정 — 사람이 봐줄 필요 없음
   - ⚠️ **`useMotionProbe`는 `vrm.update(delta)` 다음에 등록**(R3F는 등록 순서=실행 순서) — 안 그러면 스프링본 반영 전 자세를 잰다. 기준계가 Hips인 이유는 호흡(Chest)·포즈(Spine)가 Hips를 안 돌려서 — Chest 기준이면 호흡이 `hand.z`에 노이즈로 섞인다
@@ -364,13 +358,14 @@ VRM preset은 입 모양 5개(aa/ih/ou/ee/oh)지만, VRoid 모델의 추가 입 
   - ⚠️ **임계값은 자동 조정되지 않는다** — `WAVE_TARGETS`는 박힌 상수라 사람이 손으로만 바뀐다. **PASS를 얻으려고 임계를 낮추는 것 금지**(측정기를 끄는 것과 같다). "물리적으로 도달 불가능한 기준이었다"는 실측 근거가 있을 때만 조정하고, **조정 사실과 근거를 반드시 보고**한다. 요구받아도 두 경우를 구분해 제시한 뒤 판단을 받을 것 — 상세 [docs/wave-gesture-attempts.md](docs/wave-gesture-attempts.md) 「임계값 조정 규율」
 - **VRMA 레이어 = 이산 제스처, idle 은 절차가 계속 소유** ([anim/vrma/](src/companion/anim/vrma/)): `AnimationMixer`가 humanoid 본을 통째로 덮어쓰므로 그냥 멈추면 마지막 자세에서 **튄다**. three.js `fadeOut`도 답이 아님 — 블렌드 상대가 액션 시작 시점의 **얼어붙은** 스냅샷이라 그 사이 움직인 절차 레이어와 어긋난다. → 매 프레임 **①절차 결과 스냅샷 → ②mixer 덮어쓰기 → ③가중치 w로 스냅샷 쪽 slerp**(w: 0→1→1→0, smootherstep). 상대가 **살아있는 절차 출력**이라 호흡 위상까지 맞춰 복귀. w=0이면 기존 동작과 동일(비퇴행)
   - **소유권 이전 = 초기화 지점** — `action.stop()` 이 부르는 three.js `restoreOriginalState` 가 바인딩된 본 **전부**를 액션 시작 시점 값으로 되돌린다. ①절차가 **안 쓰는** 본(Hips·목·어깨·다리·손가락)은 복귀 목표를 제스처 직전 자세(rest0)로 둬서 restore 를 무효화(직전 출력으로 두면 목표가 자기 자신이라 VRMA 자세에 머물다 22° 점프) ②절차가 **쓰는** 본은 `stop()` **직후 최종 자세를 다시 써 넣어** 무효화 — 안 하면 그 한 프레임만 rest0 로 튀어 **손이 19cm 왕복하는 1프레임 블링크**가 화면에 나간다(R3F는 useFrame 다 돌고 렌더). 소유 판별은 "직전에 우리가 써 넣은 값 그대로인가"로 런타임에(채널 목록 복사 금지 — 한쪽만 바뀌면 조용히 어긋남)
-  - **클립 × 무드 합성 = 새 동작** ([clips.ts](src/companion/anim/vrma/clips.ts) `VrmaClipDef.mood`/`moodAfter`): 파일을 새로 저작하지 않고 **본=VRMA / 표정=무드**를 겹쳐 만든다. 성립 근거는 공식 7종·wave.vrma에 **expression 트랙이 없다**는 실측 — mixer가 표정을 안 건드려 무드의 held 표정·일회성 눈웃음이 재생 중에도 산다. 레이어는 `companion:mood` 이벤트만 쏘고(표정 단일 소유는 무드 시스템), 종료·중단 시 `moodAfter`(기본 neutral)로 되돌린다. **무드는 본 블렌드보다 먼저** 걸어야 표정 ramp(400~600ms)가 팔 올라오는 동안 끝난다. 현재 예: `VRMA_GREET`(손인사+happy) = **컴패니언 진입 시 1회 자동**(`greetOnReady`). ⚠️ 무드의 **루프 톤**(호흡·머리 템포)은 본이라 재생 중엔 안 보이고 복귀 후 반영된다
+  - **클립 × 무드 합성 = 새 동작** ([clips.ts](src/companion/anim/vrma/clips.ts) `VrmaClipDef.mood`/`moodAfter`): 파일을 새로 저작하지 않고 **본=VRMA / 표정=무드**를 겹쳐 만든다. 성립 근거는 공식 7종·wave.vrma에 **expression 트랙이 없다**는 실측 — mixer가 표정을 안 건드려 무드의 held 표정·일회성 눈웃음이 재생 중에도 산다. 레이어는 `companion:mood` 이벤트만 쏘고(표정 단일 소유는 무드 시스템), 종료·중단 시 `moodAfter`(기본 neutral)로 되돌린다. **무드는 본 블렌드보다 먼저** 걸어야 표정 ramp(400~600ms)가 팔 올라오는 동안 끝난다. 현재 예: `VRMA_GREET`(손인사+happy) = **컴패니언 진입 시 1회 자동**(`greetOnReady`). ⚠️ 무드의 **루프 톤**(호흡·머리 템포)은 본이라 재생 중엔 안 보이고 복귀 후 반영된다. ⚠️ `npm run verify` 의 wave 프로브는 합성판이 아니라 **`VRMA_WAVE`(무드 없음)를 잰다** — 본 트랙이 같아 수치가 동일하고 표정이 안 섞여 회귀 감시가 깨끗하다. 합성 클립을 늘려도 프로브 대상은 바꾸지 말 것
   - **부분 추출 금지** — 부위 마스킹/상대 모드/가중치 축소 전부 반려. VRMA는 전신 동시 운동 전제(실측: VRMA_02의 hips 앞숙임 +19~~30°와 head 젖힘 −16~~−25°가 **짝**이라 하나만 가져오면 균형이 깨짐). 대신 **정적인 클립을 골라 전신 사용** + `hipsPosition` 트랙만 제거(고정 상반신 프레이밍 보호)
   - **흔들기 축은 월드 기준** — 로컬 축은 자세 종속이라 예측 불가(실측: 손목 로컬 z=앞뒤 / x=좌우지만 폭 0.013로 임계 미달 / 월드 z=좌우 0.082 통과). 저작 스크립트가 부모까지 월드 회전을 FK 누적해 변환 후 pre-multiply
   - **정지 프레임으로는 depth와 좌우를 구분 못 한다** — 필름스트립으로 고른 축이 프로브에서 앞뒤 흔들기로 판명된 적 있음. 손동작은 반드시 `npm run probe`로 잰다(측정 창은 클립 타이밍에 맞출 것 — 창이 클립보다 길면 복귀 구간이 섞여 전부 깨진다)
   - **체형 차이는 리타게팅이 안 없앤다** — 자세는 맞춰주지만 팔 길이가 달라 이동폭은 다르게 나온다(같은 30°에서 남자1 0.131 / 여자1 0.096). **양 캐릭터 프로브 필수**
 - **모션 레이어 = 데이터 무변경 소급 적용**: 자연스러움은 개별 클립 저작이 아니라 **스케줄러/apply 레이어**에서 전 클립에 소급 적용한다. 새 파라미터는 **기본값 no-op**(off일 때 기존 출력 바이트 동일)으로 두고 `useAnimator`에서만 활성 → 테스트는 config 미지정=off로 비퇴행 고정([scheduler.test.ts](src/companion/anim/scheduler.test.ts))
   - **overlap(시차)**: `MotionConfig.overlap`(현재 35ms) × `channelDepth`(torso 0 · arm/head 1 · elbow 2)만큼 채널 시작을 지연 → 몸통→팔→손 proximal-to-distal lag. `tick`은 채널별 유효시각(`et = clock − offset`)으로 세그먼트를 **개별 탐색**하고 클립 수명은 `maxOffset`만큼 연장. **채널 소유·hold-last 불변**(타임라인만 밀림)
+    - ⚠️ **35ms 를 건드리지 말 것 — 부드러움 격차의 원인이 아님이 실측됐다.** VRMA 의 근위→원위 시차를 속도 상호상관으로 재보니 클립마다 −33ms~+1000ms 로 **일관성이 없다**(식별 불가). 여기를 튜닝해 자연스러움을 얻으려는 시도는 근거가 없다
   - **smooth(정착)**: `MotionConfig.smooth`(현재 0.7)로 본 채널 이징을 `baseEasing`↔`smootherstep` 블렌드. **오버슈트/anticipation 금지** — 시도 후 "각진 군인" 느낌으로 반려됨([[motion-smoothness-not-overshoot]]). 부드러움은 오버슈트가 아니라 양 끝 도함수 0으로 얻는다
   - **얼굴 채널 제외**: `isFacial`(blink/`emo.*`)은 overlap·smooth 미적용, 항상 sigmoid — 표정은 이벤트와 **동기**돼야 함
   - **본 파생(`DeriveConfig`)**: 채널→본 오일러 변환은 [channels.ts](src/companion/anim/channels.ts) `boneEulers()` **단일 함수**가 전담하고, 그 안에서 기존 채널로부터 신규 본을 만든다 — 목 분배(head→Head/Neck 0.65/0.35) · 어깨 추종(상완 **baseline 대비 편차**의 0.33) · UpperChest 분배(spine 의 0.25). 원칙은 **총 회전량 유지**(새 본이 가져간 몫만큼 원 본에서 뺀다) → 실루엣 불변, 관절만 분절. 계수 0 = 파생 본을 **기록조차 안 함** = 기존 출력 바이트 동일. ⚠️ 모델에 없는 본(Neck/UpperChest/Shoulder 는 VRM 선택 본)에 몫을 떼주면 회전이 증발한다 → `Channels` 생성자가 결측 본 계수를 0으로 낮춘다. ⚠️ 신규 본은 VRMA 레이어 「소유 판별」 결과를 바꾼다(복귀 목표 rest0→live) — 본 추가 시 `npm run verify` 로 손인사 복귀 재검증
@@ -380,5 +375,8 @@ VRM preset은 입 모양 5개(aa/ih/ou/ee/oh)지만, VRoid 모델의 추가 입 
 - **lookAt rangeMap**: VRoid 기본 inputMax 90은 정면 시선이 거의 0 → `useLookAt`에서 수평만 보정. 수직 보정 시 눈 내리깖(카메라가 가슴 높이라 하향각 포화)
 - **제스처 추가**: `anim/moods.ts` GESTURES 배열에 `{label, ease, dt:[out,hold,back], vs:[out,hold,rest]}` 항목 추가 → DebugPanel 버튼 자동 생성. 손은 상반신 프레임 하단이라 큰 손짓보다 절제된 동작이 적합
 - **held 표정 vs 일회성 표정**: 한 채널은 둘 중 하나만 소유. held(무드 유지)는 `MOODS[m].expression` → `moodExprClip`(EMOTION*CHANNELS 중 `ONESHOT_EMOTION_CHANNELS` 제외분). 일회성(진입 1회 후 0 복귀)은 `useAnimator`의 전용 클립 + 해당 채널을 held에서 제외. 현재 일회성: surprised 입벌림(`emo.mthSurprised`/SURPRISE_GASP), happy 눈웃음(`emo.eyeJoy`/HAPPY_EYE). 발화 내내 같은 부위가 고정되면 안 되는 표정은 이 패턴으로(눈감김·입벌림). happy처럼 부위 결합 preset이 문제면 부위 모프(`Fcl_MTH*_`/`Fcl*EYE*_`/`Fcl*BRW*\*`)로 분해
-- **idle 팔 포즈 (armPose 루프)**: arm/elbow 채널 단독 소유. idle=포즈 alt, **speaking=rest로 양보** → 발화 제스처가 큐 후순위로 per-channel 승(루프는 생성 시 add, 제스처는 발화 시 add). 포즈 추가 시 **양팔 전 채널 명시**(잔상 방지) + `IDLE_ARM_POSES`에 넣으면 DebugPanel `companion:idlepose` 버튼 자동 생성. 몸통 둘러보기는 `pose` 루프(spine 단독) alt로 추가(머리 FK 상속). 상세 [docs/idle-arm-plan.md](docs/idle-arm-plan.md)
+  - ⚠️ **모프 강도는 얼굴마다 다르게 저작돼 있다** — VRoid `Fcl_EYE_Joy`가 female 얼굴에선 눈을 덜 감는다. 보이는 얼굴의 **모프 정점 변위를 실측**해 부족분만큼 `Fcl_EYE_Close`를 가산한다(목표 비율 0.62, male류는 boost=0이라 비퇴행). 얼굴 교체마다 lazy 재산출(`channels.ts refreshHappyEye`) — **새 얼굴 파츠를 추가하면 이 경로를 탄다**(별도 작업 불필요하나, 표정이 이상하면 여기부터 본다)
+- **무드 톤 분기 = 템플릿 스케일**: 스케줄러엔 `moodName` 차원이 **없다**. `moods.ts` `scaleTemplate()`가 호흡/머리/포즈 템플릿을 무드 톤(tempo/amplitude)으로 재귀 스케일하고, 무드 전환 시 `TONE_LOOP_NAMES` 3종만 remove/재add 한다(hold-last가 스냅을 막음). neutral은 스케일 1×라 **원본 객체를 그대로 반환**(참조 동일 = 비퇴행). armPose/blink는 무드 무관 공유 — 톤을 주려면 이 목록에 넣을지부터 판단할 것
+- **idle 팔 포즈 (armPose 루프)**: arm/elbow 채널 단독 소유. idle=포즈 alt, **speaking=rest로 양보** → 발화 제스처가 큐 후순위로 per-channel 승(루프는 생성 시 add, 제스처는 발화 시 add). 포즈 추가 시 **양팔 전 채널 명시**(잔상 방지) + `IDLE_ARM_POSES`에 넣으면 DebugPanel `companion:idlepose` 버튼 자동 생성. 몸통 둘러보기는 `pose` 루프(spine 단독) alt로 추가(머리 FK 상속)
+  - ⚠️ **몸 앞을 가로지르는 FK 포즈는 반려됨**(팔짱·한손잡기) — 클리핑 + '손가슴' 제스처와 시각 중복. 비대칭은 허리짚기(L/R)가 담당한다. 새 포즈는 몸을 안 가로지르는 쪽으로
 - **컬러 그레이딩 = 화면 레이어**: EffectComposer 포스트프로세싱은 모델 머티리얼 비훼손(개발 원칙1=비퇴행). 컴패니언 투명배경 알파 보존 확인됨. `store.grading` 디폴트=무변화(0). 사진편집식 톤은 머티리얼 튜닝(emission 등) 아닌 이 레이어로 해결

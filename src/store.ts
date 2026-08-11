@@ -32,7 +32,7 @@ export const LIGHTING_DEFAULTS: Lighting = {
 };
 
 // MToon 셰이더 파라미터. 모드 전환 시 ShaderPanel이 언마운트돼도 유지되도록 store에 보관
-// (rim 계열은 핵심 아님 + 작은 오버레이에서 인지 불가라 제거 — docs/shader-features-plan.md)
+// (rim 계열은 핵심 아님 + 작은 오버레이에서 인지 불가라 제거 — CLAUDE.md 「MToon 셰이더 파라미터」)
 export interface ShaderParams {
   outlineWidth: number; // 0~0.02 외곽선 두께
   shadingToonyFactor: number; // 0~1 툰 경계 선명도
