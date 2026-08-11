@@ -239,7 +239,7 @@ export const IDLE_POSES: AnimTemplate[] = [
 // 0.28~0.47°/s 로 인지 문턱(0.5°/s) 바로 아래에 깔린다. 팔이 '움직이는 중인데 멈춰 보이는' 상태가
 // 20초씩 이어진 원인(motionProfile 의 WORST_STILL). 균등분포는 같은 간격이 33.4% 로 **2.28배**가
 // 되어 문턱을 넘는다 — **구간 폭은 그대로라 자세가 더 벌어지지 않는다**(진폭이 아니라 분포를 고침).
-// 상세 docs/motion-renewal-plan.md 2단계.
+// (`gaussianRandom` 의 samples=1 = 균등분포. 이 값을 되돌리면 위 증상이 재발한다)
 const armRelaxed: AnimTemplate = {
   name: 'armPose',
   // 차렷 55% (지배 완화 — 나머지 45%: 허리짚기L/R 0.05, 뒷짐 0.15, 앞으로모으기 잔여 0.2).
@@ -708,7 +708,7 @@ export interface Mood {
 
 // ── 루프 톤 분기 (5단계) ─────────────────────────────────
 // 호흡/머리/포즈는 무드별로 템포(전환 주기)·진폭(움직임 크기)을 스케일. armPose/blink는
-// 무드 무관 공유 유지(팔은 제스처가 별도 소유, 깜빡임은 이번 범위 밖 — mood-plan.md 5단계).
+// 무드 무관 공유 유지(팔은 제스처가 별도 소유, 깜빡임은 의도적으로 범위 밖).
 interface LoopTone {
   tempo: number;
   amplitude: number;

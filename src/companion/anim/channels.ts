@@ -310,7 +310,10 @@ export interface DeriveConfig {
 }
 export const DERIVE_OFF: DeriveConfig = { neck: 0, shoulder: 0, upperChest: 0 };
 // 출발점은 VRMA_03(실측상 가장 정적인 클립 = idle 에 가장 가까움)의 관절 간 각속도 비율.
-// docs/motion-renewal-plan.md 3단계 표: head:neck = 0.66:0.34 · shoulder/upperArm = 0.26.
+// 실측: head:neck = 0.66:0.34 · shoulder/upperArm = 0.26 · upperChest/chest = 0(정적 클립 미사용).
+// 재측정법: `public/animations/*.vrma` 는 GLB 컨테이너 — `animations[0].channels` 의 rotation 트랙에서
+// 인접 쿼터니언 각도차를 시간으로 나눈다. 본 이름은 `extensions.VRMC_vrm_animation.humanoid.humanBones`
+// 로 노드 인덱스를 역매핑해 얻는다.
 // 비율이 클립마다 다르므로(VRMA_05 는 목 0.49:0.51) 단일 정답 계수는 없다 — 프로파일로 조정한다.
 // - neck 0.35     : VRMA_03 실측 그대로
 // - shoulder 0.33 : VRMA_03 을 총량 대비로 환산하면 0.26/1.26 ≈ 0.21 인데, 그 값이면 파생된

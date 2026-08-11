@@ -265,7 +265,7 @@ export class AnimScheduler {
         // out = (1−α)·out_직전 + α·target 재귀 = 1차 저역통과 필터가 된다 → 명목 duration의
         // 절반쯤에 완주하고(60fps: 1.0s→0.48s) 피크 속도가 앞으로 쏠리며 프레임레이트에
         // 종속된다. chEase가 그리려던 곡선도 필터에 먹혀 smooth 설정이 무력화된다.
-        // 상세·실측 docs/motion-renewal-plan.md 원인①
+        // (실측 60fps: 30% 시점 목표 0.13 vs 실제 0.52 · 99% 도달 1.0s→0.48s)
         if (arr[j] === null) arr[j] = this.live[ch] ?? this.baseline[ch] ?? 0;
         let val: number;
         if (j >= last) {
