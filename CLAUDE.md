@@ -29,70 +29,22 @@ VRoid VRM 아바타를 불러와 MToon 셰이더로 파츠/색상을 실시간 �
 **Three.js v0.170.x** — @pixiv/three-vrm 3.x 호환 버전.
 **R3F v8 train 고정** — React 18 → @react-three/fiber v8 → drei v9. v9(React 19)로 안 올림(이득 없음, three-vrm은 양쪽 호환). 포스트프로세싱도 v8 호환 `@react-three/postprocessing@2.17` 핀 — **최신 v3는 R3F v9(React 19) 요구**라 올리면 기차가 깨진다.
 
-## 현재 프로젝트 구조
+## 프로젝트 구조 (역할 지도)
 
-```
-drei-avatar-project/
-├── public/
-│   ├── animations/           # VRMA 모션 — VRMA_01~07(VRoid 공식 무료) + wave.vrma(03 개조본). 전부 커밋
-│   └── avatars/
-│       ├── male_base.vrm     # 남자1 베이스(컨벤션 락 키스톤)
-│       ├── male1/            # 남자1 파츠(Tops/Bottoms/Face/Hair) + parts/(미커밋 원본)
-│       ├── female1/          # 여자1 베이스 + 파츠(Tops/Bottoms/Hair/Face) + parts/(미커밋 원본)
-│       ├── thumbs/           # 카탈로그 썸네일 PNG (renderThumbs 산출, 커밋)
-│       ├── Hair_sample.vrm   # 남자1 헤어 1(루트 잔류 에셋) · male_eye_sample.vrm 도 동일
-│       └── male_sample.vrm   # 컴패니언 디폴트 샘플 아바타
-├── src/
-│   ├── editor/                  # ── 에셋 조립 엔진 (composer 흡수, 에디터·컴패니언 공유) ──
-│   │   ├── useAssembledVrm.ts   #   ★공유 조립 훅: base 로드 + 슬롯 diff + faceRef + 외형값 적용. 에디터/컴패니언 양쪽이 사용
-│   │   ├── appearance.ts        #   applyAppearance(씬, shader, meshInfos) — 셰이더·색 머티리얼 적용(에디터·컴패니언 공유)
-│   │   ├── EditorScene.tsx      #   3-pane: 좌 캐릭터셀렉터+카탈로그 / 중앙 3D / 우 EditorPanel
-│   │   ├── ComposerAvatar.tsx   #   useAssembledVrm + 에디터 정책(restpose/프레이밍/meshInfos) + 라이브 프리뷰 시 useAnimator 구동
-│   │   ├── partLoader.ts        #   loadPart(GLB rebind) / loadSpringPart(VRM 스프링헤어 병합) / loadFacePart(얼굴교체+눈graft+표정미러)
-│   │   ├── constants.ts         #   CHARACTERS[] (베이스별 catalog) · Selection · VARIANTS_BY_ID · BASE_SPEC(컨벤션 락)
-│   │   ├── meshLabels.ts        #   메시→부위 라벨 규칙(VRoid 머티리얼명 기반, base·파츠·성별 공통). 파츠/색상 리스트 표시용
-│   │   └── ui/                  #   CatalogPicker(탭+썸네일 그리드) · VariantCard · ThumbScene(오프라인 썸네일 단독 렌더)
-│   ├── components/
-│   │   ├── SceneLights.tsx   # 에디터·컴패니언 공유 조명 (store.lighting 단일 소스)
-│   │   ├── GradingEffects.tsx# 컬러 그레이딩 포스트프로세싱 (EffectComposer, store.grading)
-│   │   ├── EditorPanel.tsx   # 에디터 우측 패널 (색상/셰이더/조명/톤/애니메이션) — 업로드 제거(조립 전용)
-│   │   ├── Section.tsx       # 에디터 패널 공용 접이식 섹션(아코디언, controlled 단일 오픈)
-│   │   ├── ShaderPanel.tsx   # MToon 슬라이더(외곽선/툰경계) → store.shader. 적용은 공유 appearance.ts
-│   │   ├── LightPanel.tsx    # 조명 슬라이더 (환경광/메인광 강도·각도)
-│   │   ├── GradingPanel.tsx  # 톤 슬라이더 (밝기/대비/색조/채도)
-│   │   └── AnimationPanel.tsx# 에디터 라이브 프리뷰 토글(store.animPreview) + 무드/제스처/idle포즈 트리거(window 이벤트)
-│   ├── companion/
-│   │   ├── CompanionOverlay.tsx  # fixed 오버레이 (300×400, bottom-right) + DprGovernor(FPS 하락 시 DPR↓)
-│   │   ├── CompanionAvatar.tsx   # useAssembledVrm(조립 공유) + 본기반 카메라 + 립싱크/애니/시선. 업로드는 catalog=[] 오버라이드
-│   │   ├── DebugPanel.tsx        # 컴패니언 디버그 패널 (상태/이벤트/언어/VRM 로드)
-│   │   ├── useLipsync.ts         # word timing → 음소 스케줄 → viseme
-│   │   ├── lipsyncEn.ts          # 영어 단어 → Oculus 15 viseme 음소 분해 (lipsyncEn.test.ts 콜로케이트)
-│   │   ├── visemeApplier.ts      # 모음→expressionManager / 자음→Fcl_MTH_* 직접
-│   │   ├── useLookAt.ts          # 시선 추적 + rangeMap 보정 + center/glance 사케이드
-│   │   ├── anim/                 # ── 절차 애니메이션 스케줄러 (B/C/E) ──
-│   │   │   ├── scheduler.ts      #   animFactory + tick(clock 보간) + gaussian + 클립별 ease + MotionConfig(overlap 시차/smootherstep) (scheduler.test.ts 콜로케이트)
-│   │   │   ├── channels.ts       #   논리 채널 → VRM 본/표정. baseline(rest) 정의 + micro-drift 레이어
-│   │   │   ├── moods.ts          #   무드 5종: 루프(호흡/머리/포즈/armPose팔/깜빡임) + 제스처 10종
-│   │   │   ├── useAnimator.ts    #   R3F 훅. 발화 전환 시 랜덤 제스처 + idle 팔 포즈 트리거
-│   │   │   └── vrma/             #   VRMA 이산 제스처 레이어 — clips.ts(카탈로그) + useVrmaLayer.ts(재생·idle 복귀 블렌드)
-│   │   ├── useGameEvents.ts      # window game:event 수신
-│   │   ├── tts.ts                # Google TTS REST API → AudioBuffer + word timing
-│   │   └── locales.ts            # ko/en 반응 대사 + TTS_CONFIG
-│   ├── store.ts              # Zustand: characterId/selection/eyeColor/partStatus(조립) + meshInfos/lighting/shader/grading
-│   ├── vite-env.d.ts         # VITE_GOOGLE_TTS_API_KEY 타입 선언
-│   ├── main.tsx              # 엔트리. ?thumb=<cat>:<id> 분기(ThumbScene) + window.__CATALOG 노출
-│   └── App.tsx               # 에디터(조립)/컴패니언 모드 전환
-├── scripts/                  # 오프라인 에셋 파이프라인 (npm run assets)
-│   ├── extractParts.mjs      #   VRoid 소스 VRM → 파츠 GLB/VRM (raw glTF 수술 + prune)
-│   ├── renderThumbs.mjs      #   puppeteer 로 ?thumb= 단독 렌더 → 썸네일 PNG (커밋)
-│   ├── makeWaveVrma.mjs      #   VRMA_03 개조 → wave.vrma (손가락 이식 + 월드축 흔들기 주입)
-│   ├── probeMotion.mjs       #   손동작 수치 판정 (npm run probe) — 자기 vite/브라우저를 띄움
-│   ├── probeAttach.mjs       #   같은 판정을 살아있는 dev 서버·브라우저에 붙어 실행 (npm run probe:tab, 4~6초)
-│   └── vrmaShots.mjs         #   VRMA/절차 필름스트립 비교 캡처
-├── .env                      # VITE_GOOGLE_TTS_API_KEY (선택)
-└── package.json
-```
+파일 단위 목록은 두지 않는다 — 코드를 읽으면 알 수 있고 금방 낡는다. **각 디렉터리가 무엇을 소유하는지**만 적는다.
 
+| 위치 | 소유하는 것 |
+| --- | --- |
+| `src/editor/` | **에셋 조립 엔진**(에디터·컴패니언 공유). `useAssembledVrm`(base 로드+슬롯 diff) · `partLoader`(rebind/graft) · `appearance`(셰이더·색) · `constants`(CHARACTERS 카탈로그) |
+| `src/companion/` | 오버레이·립싱크·TTS·시선. 게임 이벤트에 반응하는 VTuber 레이어 |
+| `src/companion/anim/` | **절차 애니메이션**. `scheduler`(클립 보간) · `channels`(채널→본 + 파생 + 동요) · `moods`(루프·제스처·무드) · `vrma/`(이산 제스처 레이어) · `probe`/`motionProfile`(수치 검증) |
+| `src/components/` | 공유 씬 요소(조명·그레이딩)와 에디터 패널 |
+| `scripts/` | 오프라인 파이프라인(파츠 추출·썸네일)과 검증 하네스(프로브·필름스트립). 전부 로컬 전용 |
+| `public/avatars/` | authored 베이스 + 모듈 파츠 + 썸네일. `<char>/parts/` 원본은 **gitignore** |
+| `public/animations/` | VRMA 모션 — 공식 7종 + `wave.vrma`(우리가 만든 개조본). 전부 커밋 |
+
+진입점은 [App.tsx](src/App.tsx)(에디터/컴패니언 전환)와 [main.tsx](src/main.tsx)(`?thumb=` 썸네일 단독 렌더 분기).
+상태는 [store.ts](src/store.ts) 하나 — **Three.js 객체는 절대 넣지 않는다**(아래 주의사항).
 ## 아바타 소스
 
 | 소스         | 무료    | 비고                             |
@@ -103,22 +55,13 @@ drei-avatar-project/
 **⚠️ Ready Player Me 사용 불가** — 2026년 1월 Netflix 인수 후 서비스 종료.
 **GLB 사용 시 주의** — @pixiv/three-vrm는 .vrm 파일 로딩 전용. GLB는 VRM 메타데이터 없음.
 
-## 에셋 추가 워크플로 (오프라인 파이프라인)
+## 에셋 추가 워크플로 — `asset-assembly` 스킬
 
-새 파츠(옷·헤어·얼굴)를 카탈로그에 추가하는 표준 절차. 흩어진 단계를 한 곳에 모은다.
-관련 코드: [scripts/extractParts.mjs](scripts/extractParts.mjs) · [scripts/renderThumbs.mjs](scripts/renderThumbs.mjs) · [src/editor/constants.ts](src/editor/constants.ts).
+새 파츠(옷·헤어·얼굴)·캐릭터 추가는 소스 VRM 배치 → `extractParts.mjs` 잡 1줄 → `constants.ts`
+카탈로그 1줄 → `npm run assets` → **런타임 산출물·썸네일 커밋**(`parts/` 원본은 gitignore).
+단계별 함정·조립 엔진 불변식은 `asset-assembly` 스킬에 있다.
 
-1. **소스 VRM 배치.** VRoid Studio에서 해당 캐릭터 **베이스 위에** 파츠를 입혀 export → `public/avatars/<char>/parts/`에 둔다 (예: `male1/parts/male_top_xyz.vrm`).
-   - ⚠️ `parts/`는 **gitignore**(미커밋, ~256MB). 다른 환경에선 avatar-composer에서 복사. 런타임 산출물만 커밋한다.
-2. **추출 잡 1줄** — `scripts/extractParts.mjs` `JOBS` 배열에 추가. 옷=`vrm:false`(→GLB), 스프링헤어·얼굴=`vrm:true`(→VRM, MToon·스프링 보존). 머티리얼 필터(`keepMaterial`)·멀티메시(`meshes:[]`)·본 네임스페이스(`nsBones`)는 기존 항목 참고.
-3. **카탈로그 1줄** — `src/editor/constants.ts` 해당 캐릭터의 `catalog[category].variants`에 `{id, label, url, thumb}` 추가. `id`는 **전역 고유**(썸네일 파일명·선택 키). url은 2번 `out` 경로와 일치. **`label`은 `[명칭][숫자]` 형식으로 통일**(여자1 기준): 얼굴/헤어/상의/하의 + 카테고리 내 1부터 순번(서술형 명칭 금지). id·파일명은 영문 식별자로 별개 유지 — 라벨만 이 규칙.
-4. **`npm run assets`** — extract→thumbs 일괄. (개별: `npm run extract` / `npm run thumbs`). puppeteer가 `?thumb=` 경로로 단독 렌더해 `thumbs/<id>.png` 생성.
-5. **커밋 대상** — 런타임 산출물(`<char>/*.glb`·`*.vrm`)과 **썸네일 PNG**(puppeteer 재생성 불가, 소스 취급). `parts/` 원본은 제외.
-
-- **파츠/색상 리스트 부위 라벨은 자동**(별도 작업 불필요). 에디터 리스트 표시명은 메시 이름이 아니라 **머티리얼 이름**에서 뽑는다([src/editor/meshLabels.ts](src/editor/meshLabels.ts)). VRoid 머티리얼 명명 규칙(`N00_…_<Part>_<NN>_<TYPE>`)이 base·얼굴 변형·바디·헤어·의류·양 성별에 공통이라, 규칙을 따르는 새 에셋은 자동으로 한글 부위 라벨이 붙는다(미매칭 시 원본 메시 이름 fallback). **새 부위 종류**(예 양말·장갑)가 생겨 라벨이 안 붙으면 `meshLabels.ts` `LABEL_RULES`에 1줄 추가(구체적 토큰을 앞에).
-
-- **새 캐릭터(베이스) 추가**는 `CHARACTERS[]`에 `{id, label, baseUrl, catalog}` 1개 — 엔진은 base 불가지라 무수정. variant id는 캐릭터 프리픽스로 분리(예 `f1-`).
-- **⚠️ Vercel:** `prebuild` 없음. `parts/` 소스가 미커밋이라 빌드 서버에선 추출 불가 → 위 산출물을 **커밋해야** 배포에 반영된다. 파이프라인은 로컬 전용.
+⚠️ **Vercel 빌드에선 추출이 불가능하다**(`parts/` 미커밋) → 산출물을 커밋해야 배포에 반영된다.
 
 ## VRM 로딩 패턴
 
@@ -217,17 +160,6 @@ VITE_GOOGLE_TTS_API_KEY=your_key_here
 
 VRM 로드 흐름(업로드 오버라이드): 파일 선택 → `URL.createObjectURL(file)` → `setCompanionAvatarUrl(url)` → `<CompanionOverlay uploadUrl={url}>` → CompanionAvatar 가 `catalog=[]` 단일 VRM 으로 조립(파츠 0). **uploadUrl 없으면 store 조립 아바타**(에디터 결과) 표시 — `sourceKey=uploadUrl ?? characterId` 로 리마운트.
 
-## 해결된 버그 (이력)
-
-- ~~TTS 소리 없음~~ — 원인은 `VITE_GOOGLE_TTS_API_KEY` 부재. `.env`에 키 추가 후 정상 동작 확인 (키는 gitignore됨).
-- ~~캐릭터 상반신 클리핑~~ — 본 위치 기반 자동 프레이밍으로 해결. `computeUpperBodyCamera()`가 Head/Hips 본에서 상반신 범위 계산 → fov 28 기준 거리 산출 (CompanionAvatar.tsx).
-- ~~T-포즈 고정~~ — useIdleAnimation에 팔 내리기 포즈(UpperArm Z ±1.3rad slerp) + 머리 미세 움직임 추가.
-- ~~DebugPanel 상태 미반영~~ — CompanionOverlay에 `onStatusChange`/`onSpeak` 콜백 추가하여 App까지 상태 전달.
-- ~~expressionManager.update() 이중 호출~~ — useLipsync의 수동 호출 제거 (`vrm.update(delta)`가 내부 처리).
-- ~~머리 잘림(헤어 큰 모델)~~ — 본 추정 대신 `Box3.setFromObject(scene).max.y`(실제 메시 최상단)로 카메라 상단 산출.
-- ~~제스처 안 보임~~ — 트리거는 정상이나 상반신 프레이밍이 손을 잘라냄 + 본 회전축 미검증. 미묘한 상완 움직임으로 절제(손 안 보여도 OK, TalkingHead 동일) + DebugPanel 버튼으로 축 검증.
-- ~~에디터 버튼 사라짐(컴패니언 모드)~~ — 모드 툴바 z-10 < DebugPanel z-9999. 툴바를 `z-[10000]`으로 올림 (App 컨테이너가 stacking context 미생성이라 직접 비교됨).
-
 ## 구현 로드맵
 
 > 완료 항목은 **무엇을 했는지가 아니라 다음 판단에 필요한 것만** 남긴다(문서 작성 기준 ⓐ — 경위는 `git log`). 재시도를 막아야 하는 반려·함정은 아래 「불변식」 절로 승격돼 있다.
@@ -260,50 +192,16 @@ VRM 로드 흐름(업로드 오버라이드): 파일 선택 → `URL.createObjec
   - 📌 **미해결로 남긴 관찰**: 영속성 전무(`persist`/`localStorage` 0건) → 새로고침하면 파츠 조합·색·셰이더·조명·그레이딩이 전부 초기화된다. 위 폐기 판정에 따라 **의도적으로 남긴 상태**
 - 보류: per-제스처 손가락 매핑 — 300×400 프레임에선 지엽적이라 스킵 (전역 편안한 손으로 충분)
 
-## TalkingHead 포팅 로드맵
-
-TalkingHead 1.3 소스(3,994줄) 분석 결과, 핵심 기능 전부 VRM으로 재현 가능. 일부는 VRM이 우위.
-
-### VRM 실측 데이터 (male_sample.vrm 파싱 결과)
+## VRM 실측 데이터 (male_sample.vrm 파싱)
 
 - **VRM 1.0**, preset expressions 14종: happy/angry/sad/relaxed/surprised + aa/ih/ou/ee/oh + blink/blinkL/R + neutral
 - **lookAt type: bone** — 눈동자 본 제어 네이티브 (`vrm.lookAt.target = camera` 한 줄)
-- **springBones 내장** — 머리카락/옷 물리 자동 (`vrm.update()`가 처리, TalkingHead엔 없는 기능)
-- **face morph 57개** — `Fcl_BRW_*`(눈썹), `Fcl_EYE_*`(눈), `Fcl_MTH_*`(입) 부위별 감정 모프 → ARKit 셰이프 조합 기반 무드 표현 재현 가능
+- **springBones 내장** — 머리카락/옷 물리 자동 (`vrm.update()` 가 처리)
+- **face morph 57개** — `Fcl_BRW_*`(눈썹) · `Fcl_EYE_*`(눈) · `Fcl_MTH_*`(입) 부위별 감정 모프
+- 수용한 한계: TH/RR viseme 은 혀 지오메트리가 없어 근사 · 콧잔등 등 ARKit 미세 모프 부재(300×400 오버레이서 식별 불가)
 
-### 진행 순서 (의존성 기준, 알파벳순 아님)
-
-| 순서 | 단계                      | 내용                                                                                                                                                                                                                                                             | 의존성    | 권장 모델 |
-| ---- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | --------- |
-| 1    | ✅ A. 시선                | `vrm.lookAt.lookAt()` 직접 호출 + rangeMap 보정(수평 inputMax 50) + center/glance 2상태 사케이드                                                                                                                                                                 | 독립      | Sonnet    |
-| 2    | ✅ D. 립싱크 업그레이드   | `lipsyncEn.ts` 글자 기반 음소 분해 + `visemeApplier.ts` 이중 경로 (모음→expressionManager / 자음→Fcl_MTH_Close 등 직접 조작). `registerExpression()` 불필요 — 모프 비중복으로 충돌 없음                                                                          | 독립      | Fable     |
-| 3    | ✅ B. 애니메이션 스케줄러 | `anim/` 서브시스템 — animFactory(템플릿→클립) + clock 기반 보간 + gaussian + idle/speaking 분기. **hold-last**(클립 미기록 채널 직전값 유지)로 끊김 제거. 클립별 `ease`(sigmoid 강도)                                                                            | 기반 코드 | Opus      |
-| 4    | ✅ C. 포즈 전환           | 6종 상반신 체중이동(Spine 회전 → Head/팔/Chest FK 상속 → 전신 흔들림). 진폭↑, 3~10초 전환으로 적극적 idle. 머리도 70% 미동/30% 둘러보기 alt                                                                                                                      | B 필요    | Opus      |
-| 5    | ✅ E. 제스처              | FK(IK 미사용) 발화 제스처 **10종 세트** — 팔 주도/머리 주도(끄덕·갸웃)/다가서기·물러서기/몸통 기울임/손가슴. 발화 시작 시 랜덤 1개(확률 0.6) + **DebugPanel 수동 트리거**(`companion:gesture` 이벤트). out-hold-back + ease 2.5. 전역 편안한 손(손가락 curl 1회) | B 필요    | Opus      |
-
-### D 단계: 합성 viseme 레시피
-
-VRM preset은 입 모양 5개(aa/ih/ou/ee/oh)지만, VRoid 모델의 추가 입 모프를 조합해 런타임 확장:
-
-| Oculus viseme | 합성 레시피 (VRoid 모프)                  |
-| ------------- | ----------------------------------------- |
-| PP (b/p/m)    | `Fcl_MTH_Close` 1.0                       |
-| FF (f/v)      | `Fcl_MTH_Close` 0.5 + `Fcl_MTH_Small` 0.4 |
-| SS (s/z)      | `Fcl_MTH_I` 0.4 + `Fcl_MTH_Small` 0.3     |
-| DD/nn/kk      | `Fcl_MTH_I` 또는 `Fcl_MTH_E` 저강도       |
-| CH            | `Fcl_MTH_U` 0.5 + `Fcl_MTH_I` 0.3         |
-| sil           | 전부 0                                    |
-| aa/E/ih/oh/ou | preset 그대로                             |
-
-- 구현: `expressionManager.registerExpression()` — 모델 파일 수정 불필요
-- **이식성 필수**: `Fcl_MTH_*`는 VRoid 명명 규칙. 비VRoid 모델 대비 모프 이름 감지 → 없으면 preset 5개 fallback
-
-### 알려진 한계 (수용)
-
-- TH/RR viseme: 혀 지오메트리가 모델에 없어 근사치 — Blender 수작업 필요라 스킵
-- 콧잔등 등 ARKit 미세 모프 부재 — 300×400px 오버레이에선 식별 불가
-- IK(`touchAt`)는 스킵 — three.js CCDIKSolver로 가능하나 니치 기능
-
+> TalkingHead 1.3 포팅(시선·립싱크·스케줄러·포즈·제스처)은 전 단계 완료. 합성 viseme 레시피는
+> [visemeApplier.ts](src/companion/visemeApplier.ts) 가 진실이다.
 ## 주의사항
 
 - **개발 원칙** (신기능 시 준수): ①비퇴행 — 기존 동작 feature를 저해 금지. ②실질 개선 — "개발만 하면 됨" 금지, 체감되는 개선이어야. (rim·emission 컷, 그레이딩 화면 레이어 채택, Phase 4 폐기가 이 원칙의 사례)
@@ -318,14 +216,12 @@ VRM preset은 입 모양 5개(aa/ih/ou/ee/oh)지만, VRoid 모델의 추가 입 
 - KTX2Loader 타입 충돌 (drei three-stdlib vs @types/three) → `loader`, `parser` `any` 캐스트
 - VRM 파츠는 Face*(merged), Body*(merged) 등 통합 메시 → **임의 업로드 VRM은 진정한 파츠 교체 불가**(merged). 에디터 조립은 이걸 풀려고 authored 베이스+파츠 라이브러리로 전환: 외주가 베이스 위에 스키닝한 모듈 파츠(GLB/VRM)를 런타임 rebind/graft로 조립(`src/editor/partLoader.ts`). 컨벤션 락은 authored 경로에만 적용
 
-### 에셋 조립 엔진(src/editor/) 불변식 — 신규 파츠/로더 수정 시 준수
+### 에셋 조립 엔진(src/editor/) — 상세는 `asset-assembly` 스킬
 
-- **base 불가지 로더**: `load*(url, baseVrm)` 시그니처 유지 — 새 기능도 baseVrm/스펙을 파라미터로 받게. 캐릭터(base) 추가는 `constants.ts` `CHARACTERS[]`에 1줄(베이스별 `{baseUrl, catalog}`)
-- **컨벤션 락(`BASE_SPEC`)**: VRM1.0·54본·`J_Bip_*`·A-pose·신장 1.756m·MToon. 파츠가 어기면 rebind 깨짐. 외주 사양은 composer `ASSET_SPEC.md`
-- **rebind/graft**: 외부 SkinnedMesh skinIndex는 자기 skeleton.bones 인덱스 → 같은 순서로 base 본 치환 + boneInverses 재사용. base에 없는 보조 본(소매 J*Sec*\*, 눈 본)은 부모 아래로 graft 후 rebind 매칭. 스프링 헤어는 base springBoneManager에 addJoint 병합 → `vrm.update(delta)` 한 번에 같이 돔(이중 호출 금지)
-- **MToon 통일**: 옷 GLB는 prune으로 PBR 로드 → 런타임 `toMToon` 변환(shade≈base×0.87, toony 0.95)으로 base 툰과 톤 일치. 아웃라인은 의도적 미부착(촘촘한 의류서 뭉침)
-- **seam(meshInfos)**: 파츠 add/remove 후 `setMeshInfos(collectMeshInfos(base))` 재수집 — 색 패널·ShaderPanel(`[vals, meshInfos]` 의존)이 새 파츠 인지. ComposerAvatar가 슬롯 load 성공 직후 호출. 리스트 표시명은 머티리얼명 규칙([meshLabels.ts](src/editor/meshLabels.ts))으로 부위 라벨화(미매칭 fallback=원본명). **파츠 로더가 숨긴 base 메시**(얼굴 교체 시 base 얼굴)는 `userData[SHADOWED_BY_PART]` 표식으로 `collectMeshInfos`가 제외 → swap 얼굴과 중복 행·가시성 이중 소유 토글 충돌 차단(로더가 가시성 소유, dispose 시 복원+표식 해제)
-- **slot diff + genRef**: 카테고리 슬롯당 1개 active. 빠른 연속 선택은 genRef 토큰으로 늦게 끝난 로드 폐기(레이스 가드). 캐릭터 전환은 `<ComposerAvatar key={characterId}>` remount + dispose의 `useGLTF.clear(baseUrl)`
+- **base 불가지 로더**: `load*(url, baseVrm)` 시그니처 유지. 캐릭터 추가는 `constants.ts` `CHARACTERS[]` 에 1줄
+- **컨벤션 락(`BASE_SPEC`)**: VRM1.0·54본·`J_Bip_*`·A-pose·신장 1.756m·MToon. 파츠가 어기면 rebind 깨짐
+- **seam(meshInfos)**: 파츠 add/remove 후 `setMeshInfos(collectMeshInfos(base))` 재수집 — 색·셰이더 패널이 새 파츠를 인지한다
+- rebind/graft·MToon 통일·slot diff 레이스 가드는 스킬 참조
 
 ### 애니메이션 스케줄러(anim/) 불변식 — 신규 동작 추가 시 준수
 
@@ -342,36 +238,11 @@ VRM preset은 입 모양 5개(aa/ih/ou/ee/oh)지만, VRoid 모델의 추가 입 
 - **컴패니언 해상도**: 오버레이가 에디터보다 거칠어 보이는 건 **버그 아님** — 고정 300×400에 같은 아바타를 그려 백버퍼 픽셀이 ~3배 적고(dpr 동일), fov 28 클로즈업이 이를 증폭한다. 또렷하게 하려면 `<Canvas dpr={[1,2.5]}>`로 **상한만** 올린다 — `DprGovernor`가 `initialDpr × factor`로 계산하므로 거버너와 충돌하지 않고 맞물린다(여유 시 또렷 / 부하 시 자동 강하)
   - ⚠️ **drei `<AdaptiveDpr>`는 이 캔버스에서 무동작** — `performance.regress()`를 부르는 주체가 OrbitControls인데 컴패니언엔 없다. 그래서 `<PerformanceMonitor>` 콜백을 `setDpr`에 직결한 `DprGovernor`로 대체했다. 성능 자동조절을 다시 손댈 때 `<AdaptiveDpr>`로 되돌리지 말 것
 - **이징**: 짧은 동작(제스처)은 `ease: 2.5~3.5`(완만), 기본(snap)은 blink/idle용. 각진 로봇 느낌은 ease 낮춰 해결
-- **손동작은 육안 아닌 수치로 검증** ([probe.ts](src/companion/anim/probe.ts) · `npm run probe`): 팔 기하를 **Hips 로컬**로 재서 술어 판정(흔들림 주축·상완 정지도·하완 전방·손 높이·상완 이격). 손인사 5회 실패가 전부 "덜렁덜렁" 같은 육안 표현이라 수렴 못한 데서 도입([docs/wave-gesture-attempts.md](docs/wave-gesture-attempts.md)). 값 바꾸고 `npm run probe -- --gesture <i>` 로 즉시 판정 — 사람이 봐줄 필요 없음
-  - ⚠️ **`useMotionProbe`는 `vrm.update(delta)` 다음에 등록**(R3F는 등록 순서=실행 순서) — 안 그러면 스프링본 반영 전 자세를 잰다. 기준계가 Hips인 이유는 호흡(Chest)·포즈(Spine)가 Hips를 안 돌려서 — Chest 기준이면 호흡이 `hand.z`에 노이즈로 섞인다
-  - 지표 9종: 흔들림 주축·이동폭(둘 다 **손끝** 기준 — 손목 회전은 손목 관절을 못 움직여 손목에서 재면 항상 0) · 상완 정지도 · 하완 전방 · 손 높이 · 상완 이격 · **몸통이격**(하완이 몸통에 파묻힘) · **손바닥 바깥/정면**(palmOut/palmFwd — 인사는 정면이 목표, 측면만 키우면 손이 날로 서서 안 보임)
-  - 플래그: `--wave`(손인사) · `--gesture 1,2,3`(한 세션에서 일괄 — vite 기동 1회) · `--char female1`(**캐릭터마다 값이 다르다, 양쪽 검증 필수**) · `--wait`(팔 드는 전환 구간 제외; 포함하면 어떤 동작도 '상완 덜렁거림'으로 불합격)
-  - **프로브가 못 재는 것 = 자세가 인사처럼 보이는가.** 지표 6개를 다 통과하고도 참고 이미지와 전혀 다른 자세('만세')였던 적이 있다 → 눈=방향 교정 / 프로브=회귀 감시로 역할을 나눈다. 필름스트립 [scripts/waveShots.mjs](scripts/waveShots.mjs)(`--char`·`--gesture` 지원, DebugPanel 자동 숨김)
-  - **튜닝 루프 = 탐색은 `npm run probe:tab`(4~6초) / 확정은 `npm run verify`**(vitest + 양 캐릭터 wave 프로브). 실측상 `npm run probe` 30초 중 **27초가 콜드스타트**(vite 기동·puppeteer·12MB VRM 로드)고 측정 구간은 3초뿐 — [scripts/probeAttach.mjs](scripts/probeAttach.mjs)는 전용 헤드리스 크롬 하나를 띄워두고 로드된 탭을 재사용해 그 27초를 1회 비용으로 접는다(`npm run dev` 선행 필요). 측정·판정 로직은 페이지 안(`useMotionProbe`)이라 **동일**하고, 판정도 exit code 로 나간다(`probeMotion.mjs:173`과 같은 규약)
-    - **브라우저 손으로 띄우지 말 것** — 스크립트가 기동·재사용·15분 유휴 자동종료까지 관리한다. 수동으로 남기면 크롬 9프로세스(≈1.1GB)가 다음 세션의 유령이 된다(실제로 다른 프로젝트가 남긴 9222 headless `--disable-gpu` 크롬에 붙어 WebGL 없이 63초를 날린 적 있음 → 그래서 포트가 아니라 **user-data-dir 로 신원을 확인**하고 남의 것이면 붙지 않는다)
-    - **dev 서버도 신원으로 찾는다** — 5173은 vite 전역 기본값이라 번호만 믿으면 남의 프로젝트 서버를 조용히 잰다. [vite.config.ts](vite.config.ts) `probe-dev-server-identity` 플러그인이 `GET /__probe_id` → `{root, pid}` 로 응답하고, 프로브가 사람 대역을 훑어 **root가 이 저장소인** 서버를 고른다(포트가 5174로 밀려도 따라감). ⚠️ 파일에 기록을 남기는 방식은 **낡은 기록이 두 방식으로 깨져 폐기**했다(①사용자 dev가 IPv6면 일회용 서버가 IPv4로 나란히 붙어 덮어씀 ②config 수정 시 재시작 경합). 살아있는 서버에게 직접 물으면 낡은 상태가 존재할 수 없다
-    - ⚠️ **포트 대역을 갈라 쓴다 — 5173~5189는 사람의 `npm run dev` 몫**(vite는 점유 시 5173부터 위로 올라간다), **5190대는 스크립트 전용**(probeMotion 5190 · waveShots 5191 · vrmaShots 5192 · renderThumbs 5193). 겹치면 `npm run probe` 가 도는 중에 `probe:tab` 이 그 일회용 서버에 붙는다 — **같은 저장소를 서빙하므로 신원 검사를 그냥 통과한다.** 새 스크립트를 추가할 땐 5190대에서 고를 것
-    - ⚠️ **5190대는 스크립트가 도는 동안만 — 다른 용도 전용 금지.** 상주 서버로 띄우거나, 사람이 보는 화면으로 쓰거나, dev 서버 대용으로 재활용하지 않는다. 스크립트가 끝나면 자기 서버를 반드시 죽인다(각 스크립트 `finally`). 그래야 "5190대에 떠 있다 = 지금 스크립트가 도는 중"이 항상 참이다
-    - ⚠️ **에이전트는 `npm run dev` 를 임의로 띄우지 않는다** — 필요하면 **먼저 사람에게 묻는다**("혹시 dev 서버 띄우셨나요?"). 이유: ①에이전트가 안 띄우면 떠 있는 dev 서버는 **정의상 사람 것**이라 소유권 판별이 아예 불필요해진다(세션이 바뀌면 이전 세션의 전적을 알 수 없다) ②사람도 어차피 고쳐지는 걸 화면으로 보고 싶어 하므로 **하나를 공유하는 편이 낫다**. 마찬가지로 **`pkill -f vite` 같은 일괄 종료 금지** — 사람이 띄운 서버가 말없이 죽는다(실제로 그럴 뻔했다). 죽일 게 있으면 PID 를 특정해 확인받고 죽인다
-    - **낡은 코드를 잴 수 없다** — `--no-reload`를 줘도 `src`/`public/animations`/`public/avatars`의 mtime이 페이지 `performance.timeOrigin`보다 새로우면 강제 리로드. HMR 반영 여부는 밖에서 확인 불가 + R3F 씬은 HMR 후 상태가 어긋나므로 **낡았을 가능성이 있으면 리로드**(오판을 안전한 방향으로). 또 dev 서버를 재기동하면 모듈 해시가 바뀌므로 `setCacheEnabled(false)` 필수 — 안 하면 부팅이 멈추고 증상은 "ready 도달 실패"로만 보인다
-    - ⚠️ **완료 선언은 여전히 `npm run verify`** — `ProbeResult`에 조건(로드 후 경과·트리거 후 경과)이 없어 **프로토콜을 건너뛴 수치와 지킨 수치가 화면상 구별되지 않는다**. `probe:tab`은 프로토콜을 코드로 강제하지만, 브라우저에서 손으로 이벤트를 쏜 수치는 방향 판단 전용
-  - ⚠️ **임계값은 자동 조정되지 않는다** — `WAVE_TARGETS`는 박힌 상수라 사람이 손으로만 바뀐다. **PASS를 얻으려고 임계를 낮추는 것 금지**(측정기를 끄는 것과 같다). "물리적으로 도달 불가능한 기준이었다"는 실측 근거가 있을 때만 조정하고, **조정 사실과 근거를 반드시 보고**한다. 요구받아도 두 경우를 구분해 제시한 뒤 판단을 받을 것 — 상세 [docs/wave-gesture-attempts.md](docs/wave-gesture-attempts.md) 「임계값 조정 규율」
-- **VRMA 레이어 = 이산 제스처, idle 은 절차가 계속 소유** ([anim/vrma/](src/companion/anim/vrma/)): `AnimationMixer`가 humanoid 본을 통째로 덮어쓰므로 그냥 멈추면 마지막 자세에서 **튄다**. three.js `fadeOut`도 답이 아님 — 블렌드 상대가 액션 시작 시점의 **얼어붙은** 스냅샷이라 그 사이 움직인 절차 레이어와 어긋난다. → 매 프레임 **①절차 결과 스냅샷 → ②mixer 덮어쓰기 → ③가중치 w로 스냅샷 쪽 slerp**(w: 0→1→1→0, smootherstep). 상대가 **살아있는 절차 출력**이라 호흡 위상까지 맞춰 복귀. w=0이면 기존 동작과 동일(비퇴행)
-  - **소유권 이전 = 초기화 지점** — `action.stop()` 이 부르는 three.js `restoreOriginalState` 가 바인딩된 본 **전부**를 액션 시작 시점 값으로 되돌린다. ①절차가 **안 쓰는** 본(Hips·목·어깨·다리·손가락)은 복귀 목표를 제스처 직전 자세(rest0)로 둬서 restore 를 무효화(직전 출력으로 두면 목표가 자기 자신이라 VRMA 자세에 머물다 22° 점프) ②절차가 **쓰는** 본은 `stop()` **직후 최종 자세를 다시 써 넣어** 무효화 — 안 하면 그 한 프레임만 rest0 로 튀어 **손이 19cm 왕복하는 1프레임 블링크**가 화면에 나간다(R3F는 useFrame 다 돌고 렌더). 소유 판별은 "직전에 우리가 써 넣은 값 그대로인가"로 런타임에(채널 목록 복사 금지 — 한쪽만 바뀌면 조용히 어긋남)
-  - **클립 × 무드 합성 = 새 동작** ([clips.ts](src/companion/anim/vrma/clips.ts) `VrmaClipDef.mood`/`moodAfter`): 파일을 새로 저작하지 않고 **본=VRMA / 표정=무드**를 겹쳐 만든다. 성립 근거는 공식 7종·wave.vrma에 **expression 트랙이 없다**는 실측 — mixer가 표정을 안 건드려 무드의 held 표정·일회성 눈웃음이 재생 중에도 산다. 레이어는 `companion:mood` 이벤트만 쏘고(표정 단일 소유는 무드 시스템), 종료·중단 시 `moodAfter`(기본 neutral)로 되돌린다. **무드는 본 블렌드보다 먼저** 걸어야 표정 ramp(400~600ms)가 팔 올라오는 동안 끝난다. 현재 예: `VRMA_GREET`(손인사+happy) = **컴패니언 진입 시 1회 자동**(`greetOnReady`). ⚠️ 무드의 **루프 톤**(호흡·머리 템포)은 본이라 재생 중엔 안 보이고 복귀 후 반영된다. ⚠️ `npm run verify` 의 wave 프로브는 합성판이 아니라 **`VRMA_WAVE`(무드 없음)를 잰다** — 본 트랙이 같아 수치가 동일하고 표정이 안 섞여 회귀 감시가 깨끗하다. 합성 클립을 늘려도 프로브 대상은 바꾸지 말 것
-  - **부분 추출 금지** — 부위 마스킹/상대 모드/가중치 축소 전부 반려. VRMA는 전신 동시 운동 전제(실측: VRMA_02의 hips 앞숙임 +19~~30°와 head 젖힘 −16~~−25°가 **짝**이라 하나만 가져오면 균형이 깨짐). 대신 **정적인 클립을 골라 전신 사용** + `hipsPosition` 트랙만 제거(고정 상반신 프레이밍 보호)
-  - **흔들기 축은 월드 기준** — 로컬 축은 자세 종속이라 예측 불가(실측: 손목 로컬 z=앞뒤 / x=좌우지만 폭 0.013로 임계 미달 / 월드 z=좌우 0.082 통과). 저작 스크립트가 부모까지 월드 회전을 FK 누적해 변환 후 pre-multiply
-  - **정지 프레임으로는 depth와 좌우를 구분 못 한다** — 필름스트립으로 고른 축이 프로브에서 앞뒤 흔들기로 판명된 적 있음. 손동작은 반드시 `npm run probe`로 잰다(측정 창은 클립 타이밍에 맞출 것 — 창이 클립보다 길면 복귀 구간이 섞여 전부 깨진다)
-  - **체형 차이는 리타게팅이 안 없앤다** — 자세는 맞춰주지만 팔 길이가 달라 이동폭은 다르게 나온다(같은 30°에서 남자1 0.131 / 여자1 0.096). **양 캐릭터 프로브 필수**
-- **모션 레이어 = 데이터 무변경 소급 적용**: 자연스러움은 개별 클립 저작이 아니라 **스케줄러/apply 레이어**에서 전 클립에 소급 적용한다. 새 파라미터는 **기본값 no-op**(off일 때 기존 출력 바이트 동일)으로 두고 `useAnimator`에서만 활성 → 테스트는 config 미지정=off로 비퇴행 고정([scheduler.test.ts](src/companion/anim/scheduler.test.ts))
-  - **overlap(시차)**: `MotionConfig.overlap`(현재 35ms) × `channelDepth`(torso 0 · arm/head 1 · elbow 2)만큼 채널 시작을 지연 → 몸통→팔→손 proximal-to-distal lag. `tick`은 채널별 유효시각(`et = clock − offset`)으로 세그먼트를 **개별 탐색**하고 클립 수명은 `maxOffset`만큼 연장. **채널 소유·hold-last 불변**(타임라인만 밀림)
-    - ⚠️ **35ms 를 건드리지 말 것 — 부드러움 격차의 원인이 아님이 실측됐다.** VRMA 의 근위→원위 시차를 속도 상호상관으로 재보니 클립마다 −33ms~+1000ms 로 **일관성이 없다**(식별 불가). 여기를 튜닝해 자연스러움을 얻으려는 시도는 근거가 없다
-  - **smooth(정착)**: `MotionConfig.smooth`(현재 0.7)로 본 채널 이징을 `baseEasing`↔`smootherstep` 블렌드. **오버슈트/anticipation 금지** — 시도 후 "각진 군인" 느낌으로 반려됨([[motion-smoothness-not-overshoot]]). 부드러움은 오버슈트가 아니라 양 끝 도함수 0으로 얻는다
-  - **얼굴 채널 제외**: `isFacial`(blink/`emo.*`)은 overlap·smooth 미적용, 항상 sigmoid — 표정은 이벤트와 **동기**돼야 함
-  - **본 파생(`DeriveConfig`)**: 채널→본 오일러 변환은 [channels.ts](src/companion/anim/channels.ts) `boneEulers()` **단일 함수**가 전담하고, 그 안에서 기존 채널로부터 신규 본을 만든다 — 목 분배(head→Head/Neck 0.65/0.35) · 어깨 추종(상완 **baseline 대비 편차**의 0.33) · UpperChest 분배(spine 의 0.25). 원칙은 **총 회전량 유지**(새 본이 가져간 몫만큼 원 본에서 뺀다) → 실루엣 불변, 관절만 분절. 계수 0 = 파생 본을 **기록조차 안 함** = 기존 출력 바이트 동일. ⚠️ 모델에 없는 본(Neck/UpperChest/Shoulder 는 VRM 선택 본)에 몫을 떼주면 회전이 증발한다 → `Channels` 생성자가 결측 본 계수를 0으로 낮춘다. ⚠️ 신규 본은 VRMA 레이어 「소유 판별」 결과를 바꾼다(복귀 목표 rest0→live) — 본 추가 시 `npm run verify` 로 손인사 복귀 재검증
-  - **프로파일러는 사본을 안 만든다**: `npm run motion:stat` 이 `boneEulers`·`driftAt` 을 apply 와 **같이** 호출한다. 새 본/채널을 추가하면 프로파일에 자동 반영 — 표를 별도로 손댈 일이 없다(사본을 두면 사본만 조용히 낡는다)
-  - **자세 동요(`DRIFT`)**: [channels.ts](src/companion/anim/channels.ts) 의 저주파 진동을 `boneEulers` 가 **파생까지 끝낸 뒤 본 축(`<본>.<축>`) 단위로** 최종 euler 에 상시 가산 → 루프의 평평한 구간(제스처 정지·포즈 유지)도 얼지 않음. 활성 모션 땐 진폭에 묻혀 **hold 감지 불필요**. ⚠️ `tick` 반환 state 는 `scheduler.live` **동일 참조 → mutate 금지**(euler 로컬에만 가산). 제외=얼굴(표정 동기)·손목(상완 동요가 FK 전달)·`chest.inhale`(이미 진동). `DRIFT_AMP=0` 이면 완전 무영향 — **부유감이 나면 여기부터 0으로 내려 격리하고 진폭을 낮춘다(속도가 아니라)**
-  - **동요 설계 규칙 3가지** (4단계 실측): ⓐ**축당 4성분 합성** — sine 하나는 반주기마다 속도가 0을 지나 정지가 남는다(진폭을 키워도 짧아질 뿐) ⓑ**진폭은 `a ∝ 1/f`** 로 깔아 성분별 속도 기여를 균등하게 — 성분 수보다 **축별 속도 크기**가 지배적이다(1/√f 배분은 성분을 늘리고도 최장 정지가 3.75→5.97s 로 악화) ⓒ**채널이 아니라 본에 더한다** — 채널에 더하면 분배 계수만큼 쪼개져 두 본이 같은 파형을 공유한다. ⚠️ **속도를 얻으려고 주파수만 올리지 말 것** — 진폭 0.1°짜리 빠른 성분은 지표만 통과시키고 눈엔 안 보인다(문턱 0.5°/s 는 **인지** 기준). 대역 0.5~~2.6 rad/s · 축당 진폭 0.95~~1.41° 가 그 선
+- **손동작은 육안 아닌 수치로 검증** ([probe.ts](src/companion/anim/probe.ts) · `npm run probe`): 팔 기하를 **Hips 로컬**로 재서 술어 판정. 값 바꾸고 `npm run probe -- --gesture <i>` 로 즉시 판정 — 사람이 봐줄 필요 없다. **캐릭터마다 값이 다르므로 양쪽 검증 필수.** 지표·플래그·튜닝 루프는 `motion-probe` 스킬
+  - ⚠️ **PASS 를 얻으려고 임계값(`WAVE_TARGETS`)을 낮추지 않는다** — 측정기를 끄는 것과 같다. 조정은 "물리적으로 도달 불가능한 기준이었다"는 실측 근거가 있을 때만, 그리고 **반드시 보고**한다
+  - ⚠️ **에이전트는 `npm run dev` 를 임의로 띄우지 않는다**(먼저 사람에게 묻는다) · **`pkill -f vite` 같은 일괄 종료 금지** — 사람이 띄운 서버가 말없이 죽는다. 포트 대역(사람 5173~5189 / 스크립트 5190대)과 브라우저 수명 관리는 `motion-probe` 스킬
+- **VRMA 레이어 = 이산 제스처, idle 은 절차가 계속 소유** ([anim/vrma/](src/companion/anim/vrma/)): `AnimationMixer` 가 본을 통째로 덮어쓰므로 그냥 멈추면 **튄다** → 매 프레임 절차 출력을 스냅샷해 가중치 w 로 slerp 복귀(w=0 이면 기존 동작과 동일). 새 동작 추가 = 파일 떨구고 카탈로그 1줄. **소유권 이전·부분 추출 금지·월드 축 등 불변식은 `vrma-motion` 스킬**(새 손동작 전 필독)
+- **모션 레이어 = 데이터 무변경 소급 적용**: 자연스러움은 개별 클립 저작이 아니라 **스케줄러/apply 레이어**에서 전 클립에 소급 적용한다. 새 파라미터는 **기본값 no-op**(off 일 때 기존 출력 바이트 동일)으로 두고 `useAnimator` 에서만 활성. **overlap·smooth·본 파생·자세 동요의 상세와 금지사항은 `motion-tuning` 스킬**
 - **lookAt rangeMap**: VRoid 기본 inputMax 90은 정면 시선이 거의 0 → `useLookAt`에서 수평만 보정. 수직 보정 시 눈 내리깖(카메라가 가슴 높이라 하향각 포화)
 - **제스처 추가**: `anim/moods.ts` GESTURES 배열에 `{label, ease, dt:[out,hold,back], vs:[out,hold,rest]}` 항목 추가 → DebugPanel 버튼 자동 생성. 손은 상반신 프레임 하단이라 큰 손짓보다 절제된 동작이 적합
 - **held 표정 vs 일회성 표정**: 한 채널은 둘 중 하나만 소유. held(무드 유지)는 `MOODS[m].expression` → `moodExprClip`(EMOTION*CHANNELS 중 `ONESHOT_EMOTION_CHANNELS` 제외분). 일회성(진입 1회 후 0 복귀)은 `useAnimator`의 전용 클립 + 해당 채널을 held에서 제외. 현재 일회성: surprised 입벌림(`emo.mthSurprised`/SURPRISE_GASP), happy 눈웃음(`emo.eyeJoy`/HAPPY_EYE). 발화 내내 같은 부위가 고정되면 안 되는 표정은 이 패턴으로(눈감김·입벌림). happy처럼 부위 결합 preset이 문제면 부위 모프(`Fcl_MTH*_`/`Fcl*EYE*_`/`Fcl*BRW*\*`)로 분해
