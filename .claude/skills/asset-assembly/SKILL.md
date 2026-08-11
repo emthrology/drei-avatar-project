@@ -1,6 +1,6 @@
 ---
 name: asset-assembly
-description: 아바타 파츠(옷·헤어·얼굴)나 새 캐릭터 베이스를 카탈로그에 추가하는 절차와 에셋 조립 엔진(src/editor/)의 불변식. extractParts/renderThumbs 파이프라인, npm run assets, partLoader 의 rebind/graft, meshInfos 재수집을 다룰 때 사용한다.
+description: 아바타 파츠(상의·하의·헤어·얼굴)나 새 캐릭터를 카탈로그에 추가하는 절차와 에셋 조립 엔진(src/editor/)의 불변식. 새 옷·머리를 넣고 싶을 때, 파츠를 바꿨는데 색상/셰이더 패널에 안 나타난다·썸네일이 없다·파츠가 깨져 보인다는 문제를 다룰 때, extractParts/renderThumbs 파이프라인이나 npm run assets 를 돌릴 때, partLoader 의 rebind/graft 를 손볼 때 사용한다.
 ---
 
 # 에셋 추가 워크플로 (오프라인 파이프라인)

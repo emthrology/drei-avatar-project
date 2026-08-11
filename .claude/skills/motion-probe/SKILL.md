@@ -1,6 +1,6 @@
 ---
 name: motion-probe
-description: 손동작·제스처를 수치로 검증하는 방법과 프로브/dev 서버 운영 규율. 팔·손 제스처 값을 바꿔 검증할 때, npm run probe / probe:tab / verify 를 돌릴 때, 헤드리스 브라우저나 vite dev 서버를 띄우거나 죽일 때, 프로브 임계값(WAVE_TARGETS) 조정을 검토할 때 사용한다.
+description: 손동작·제스처가 제대로 나오는지 수치로 검증하는 방법. 손인사나 제스처가 어색하다·안 보인다·덜렁거린다·팔이 이상하다는 문제를 다룰 때, 팔/손 각도 값을 바꾸고 잘 됐는지 확인해야 할 때, npm run probe / probe:tab / verify 를 돌릴 때, 헤드리스 브라우저나 vite dev 서버를 띄우거나 죽일 때, 프로브 임계값(WAVE_TARGETS) 조정을 검토할 때 사용한다.
 ---
 
 # 손동작은 육안이 아니라 수치로 검증한다
