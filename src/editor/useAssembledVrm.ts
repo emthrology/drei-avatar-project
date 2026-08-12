@@ -46,20 +46,18 @@ export function useAssembledVrm(
   const faceRef = useRef<LoadedFacePart | null>(null);
 
   const selection = useAvatarStore((s) => s.selection);
-  const eyeColor = useAvatarStore((s) => s.eyeColor);
   const setPartStatus = useAvatarStore((s) => s.setPartStatus);
-  // 외형값(셰이더·메시 색) — 에디터에서 조정하면 컴패니언도 같은 store 로 적용(공유).
+  // 외형값(셰이더·메시 색·색상 세트) — 에디터에서 조정하면 컴패니언도 같은 store 로 적용(공유).
   const shader = useAvatarStore((s) => s.shader);
   const meshInfos = useAvatarStore((s) => s.meshInfos);
+  const colorSets = useAvatarStore((s) => s.colorSets);
   // 최신값 통로 — 파츠 로딩 이펙트(비동기)가 재실행 없이 현재 값을 읽으려고 쓴다.
   // 쓰기는 렌더가 아니라 **커밋 시점**에. 이 훅은 useGLTF 가 서스펜드하므로 **버려지는 렌더가
   // 실제로 발생**하고, 그 렌더가 ref 를 건드리면 커밋 안 된 값이 남는다(오늘은 값이 멱등이라
   // 무해하지만 원리적으로 잘못). useLayoutEffect 는 모든 useEffect 보다 먼저 실행되므로
   // 아래 로딩 이펙트가 낡은 값을 읽는 일은 없다 — 선언 순서에도 의존하지 않는다.
-  const eyeColorRef = useRef(eyeColor);
   const onAssembledRef = useRef(onAssembled);
   useLayoutEffect(() => {
-    eyeColorRef.current = eyeColor;
     onAssembledRef.current = onAssembled;
   });
   // 조립 변경(파츠 add/remove) 카운터 → 새 파츠 머티리얼에도 외형값 재적용 트리거
@@ -131,10 +129,7 @@ export function useAssembledVrm(
           return;
         } // 더 새 선택이 들어옴
         slotsRef.current.set(cat, { variantId: desired, loaded });
-        if (cat === 'face') {
-          faceRef.current = loaded as LoadedFacePart;
-          faceRef.current.setEyeColor(eyeColorRef.current);
-        }
+        if (cat === 'face') faceRef.current = loaded as LoadedFacePart;
         loaded.setVisible(true);
         if (loaded.missingBones.length)
           console.warn(
@@ -154,18 +149,16 @@ export function useAssembledVrm(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vrm, selection, catalog]);
 
-  useEffect(() => {
-    faceRef.current?.setEyeColor(eyeColor);
-  }, [eyeColor]);
-
-  // ─── 외형값(셰이더·메시 색) 적용 — 에디터·컴패니언 공유 ────────────────────────────
-  // store.shader / store.meshInfos 변경 OR 조립 변경(assemblyVersion) 시 씬 머티리얼에 반영.
+  // ─── 외형값(셰이더·메시 색·색상 세트) 적용 — 에디터·컴패니언 공유 ──────────────────
+  // store.shader / meshInfos / colorSets 변경 OR 조립 변경(assemblyVersion) 시 씬에 반영.
   // 에디터에서 슬라이더/색 조정 → 같은 store → 컴패니언도 동일 적용(가시성 제외, appearance.ts 참조).
+  // 세트가 여기 deps 에 있어야 **파츠를 갈아도 유지된다** — 새 파츠는 파일의 authored 색으로
+  // 들어오는데, assemblyVersion 이 오르며 이 이펙트가 다시 돌아 세트를 덧입힌다.
   useEffect(() => {
     const v = vrmRef.current;
     if (!v) return;
-    applyAppearance(v.scene, shader, meshInfos);
-  }, [vrm, shader, meshInfos, assemblyVersion]);
+    applyAppearance(v.scene, shader, meshInfos, colorSets);
+  }, [vrm, shader, meshInfos, colorSets, assemblyVersion]);
 
   const syncFace = () => faceRef.current?.sync();
 

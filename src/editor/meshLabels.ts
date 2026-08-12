@@ -17,33 +17,54 @@
 //   3) 미매칭은 **원본 메시 이름으로 fallback**(개발 원칙①=비퇴행: 비VRoid·예외 머티리얼도 안 깨짐).
 //   4) 매칭/색 적용 키는 여전히 메시 `name` — label 은 표시 전용(append-only 필드).
 
+// 부위 라벨 상수 — 표시 문자열이자 **부위 식별자**다(colorSets 의 세트가 이 키로 부위를 소유).
+// 문자열 리터럴을 여기저기 흩뿌리면 오타가 조용한 미적용으로 나타나므로 한 곳에서만 선언한다.
+export const PART_LABELS = {
+  eyeIris: '눈동자',
+  eyeHighlight: '눈 하이라이트',
+  eyeWhite: '흰자',
+  eyelash: '속눈썹',
+  eyeline: '눈매',
+  brow: '눈썹',
+  mouth: '입',
+  skinFace: '피부(얼굴)',
+  skinBody: '피부(몸)',
+  hairBack: '뒷머리',
+  hair: '머리',
+  tops: '상의',
+  bottoms: '하의',
+  shoes: '신발',
+} as const;
+
+export type PartLabel = (typeof PART_LABELS)[keyof typeof PART_LABELS];
+
 // 위에서부터 첫 매칭 채택 → **구체적인 부위를 앞에**.
-const LABEL_RULES: { test: RegExp; label: string }[] = [
+const LABEL_RULES: { test: RegExp; label: PartLabel }[] = [
   // 눈 (EYE 타입) — Iris/Highlight/White 는 Face* 보다 구체적이라 먼저
-  { test: /EyeIris/i, label: '눈동자' },
-  { test: /EyeHighlight/i, label: '눈 하이라이트' },
-  { test: /EyeWhite/i, label: '흰자' },
+  { test: /EyeIris/i, label: PART_LABELS.eyeIris },
+  { test: /EyeHighlight/i, label: PART_LABELS.eyeHighlight },
+  { test: /EyeWhite/i, label: PART_LABELS.eyeWhite },
   // 얼굴 부속 (FACE 타입) — FaceMouth/Brow/Eyeline/Eyelash. 피부(_Face_NN_SKIN)보다 먼저
-  { test: /FaceEyelash/i, label: '속눈썹' },
-  { test: /FaceEyeline/i, label: '눈매' },
-  { test: /FaceBrow/i, label: '눈썹' },
-  { test: /FaceMouth/i, label: '입' },
+  { test: /FaceEyelash/i, label: PART_LABELS.eyelash },
+  { test: /FaceEyeline/i, label: PART_LABELS.eyeline },
+  { test: /FaceBrow/i, label: PART_LABELS.brow },
+  { test: /FaceMouth/i, label: PART_LABELS.mouth },
   // 피부 — 얼굴 피부(_Face_NN_SKIN: Face 뒤에 숫자)와 몸 피부(_Body_)
-  { test: /_Face_\d/i, label: '피부(얼굴)' },
-  { test: /_Body_/i, label: '피부(몸)' },
+  { test: /_Face_\d/i, label: PART_LABELS.skinFace },
+  { test: /_Body_/i, label: PART_LABELS.skinBody },
   // 헤어 — HairBack(뒷머리)을 Hair(앞/전체)보다 먼저
-  { test: /HairBack/i, label: '뒷머리' },
-  { test: /Hair/i, label: '머리' },
+  { test: /HairBack/i, label: PART_LABELS.hairBack },
+  { test: /Hair/i, label: PART_LABELS.hair },
   // 의류
-  { test: /Tops/i, label: '상의' },
-  { test: /Bottoms/i, label: '하의' },
-  { test: /Shoes/i, label: '신발' },
+  { test: /Tops/i, label: PART_LABELS.tops },
+  { test: /Bottoms/i, label: PART_LABELS.bottoms },
+  { test: /Shoes/i, label: PART_LABELS.shoes },
 ];
 
 // 머티리얼 이름 → 부위 라벨. 미매칭이면 null(소비처가 원본 메시 이름으로 fallback).
 export function labelForMaterialName(
   matName: string | undefined | null,
-): string | null {
+): PartLabel | null {
   if (!matName) return null;
   for (const r of LABEL_RULES) if (r.test.test(matName)) return r.label;
   return null;

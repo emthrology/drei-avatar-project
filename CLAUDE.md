@@ -89,8 +89,11 @@ useFrame((_, delta) => {
 ShaderPanel은 슬라이더로 `store.shader`만 갱신. **실제 씬 머티리얼 적용은 공유 조립 훅**
 (`useAssembledVrm` → `editor/appearance.ts` `applyAppearance`)이 담당 → **에디터·컴패니언 동일 적용**.
 (이전 `setShaderPanelScene` module singleton 패턴은 폐기 — 컴패니언이 ShaderPanel을 안 띄워 적용
-누락됐던 버그를 공유 계층으로 해소.) 메시 색(lit/shade)도 같은 `applyAppearance`로 양쪽 적용.
+누락됐던 버그를 공유 계층으로 해소.) 메시 색(lit/shade)·색상 세트도 같은 `applyAppearance`로 양쪽 적용.
 가시성(show/hide)만 에디터 전용(컴패니언 가시성은 파츠 로더가 소유).
+⚠️ **머티리얼 색을 쓰는 코드는 `applyAppearance` 하나뿐이어야 한다** — 색 우선순위(세트 > 메시별
+색)가 한 함수 안에 있어야 "나중에 도는 쪽이 조용히 되돌리는" 이중 축 버그가 원리적으로 불가능해진다.
+새 색 노브가 필요하면 여기 레이어로 넣을 것(로더·패널이 직접 칠하지 않는다).
 
 조작 가능한 파라미터 (전역, `store.shader`):
 
@@ -187,7 +190,10 @@ VRM 로드 흐름(업로드 오버라이드): 파일 선택 → `URL.createObjec
 - [x] **인사(greet) = 손인사 + happy 합성** (2026-08-10) — 컴패니언 진입 시 1회 자동. **새 `.vrma` 파일 0개**(`VrmaClipDef.mood`로 본=VRMA / 표정=무드를 겹침)
 - [x] **박수(clap)** (2026-08-11) — 공식 7종에 박수가 없어 **외부 조달**(출처는 [clips.ts](src/companion/anim/vrma/clips.ts) 주석). 이 라운드의 수확은 동작 하나가 아니라 **접촉 동작이라는 새 범주**다: VRMA 는 회전만 담는데 접촉은 위치 제약이라 리타게팅이 깨뜨린다(같은 클립이 남자1 0.0227 / 여자1 0.0106 으로 닿아 여자1은 겹침). 에셋에 상수 오프셋을 굽는 해법은 **최적점이 체형마다 어긋나 원리적으로 반려**(남자1 0° / 여자1 6°) → **런타임 최소 IK**([palmContact.ts](src/companion/anim/vrma/palmContact.ts) `minPalmGap`)로 해결. 파고드는 프레임만 되밀어 **원본 동작 보존 + 체형 무관**(보정 후 0.0226 / 0.0210). 부산물: **양손 프로브**(`npm run probe -- --clap`, `verify` 편입). 불변식은 `vrma-motion` 스킬
 - ❌ **분할 안 함: `moods.ts`** (801줄, 2026-08 판정) — 크기는 크지만 전체가 "무드가 무엇으로 구성되는가" **한 덩어리 데이터 카탈로그**고, 소비처 4곳이 쓰는 공개 표면은 5개뿐(`MOODS`·`IDLE_POSES`·`IDLE_ARM_POSES`·`TONE_LOOP_NAMES`·`WAVE`)이다. 제스처 추가는 `GESTURES` 배열 한 곳만 건드리므로 **크기가 비용을 만들지 않는다.** 이전 근거였던 "5종 혼재로 응집 낮음"은 *구문 범주*를 센 것이지 바뀌는 이유를 센 게 아니었다. **줄 수는 분할 근거가 아니다**(원칙②). 재검토 트리거는 크기가 아니라 실제 마찰 — 제스처 카탈로그를 런타임 로드하게 되거나, 무드별 세트가 독립 배포 단위가 되거나, `moods.ts` **전체를 읽어야만 하는** 상황이 반복될 때
-- [ ] **후속: 테스트 확장** — 순수/준순수인데 미테스트: [store.ts](src/store.ts)(`setCharacter` 리셋·mesh patch) · [meshLabels.ts](src/editor/meshLabels.ts)(`LABEL_RULES` 매칭·fallback, 48줄 순수 규칙 = **최고 ROI**). `channels.ts`는 [channels.test.ts](src/companion/anim/channels.test.ts)로 일부 커버됨(총 회전량 유지·계수 0 no-op)
+- [x] **색상 세트 (헤어/눈동자)** (2026-08-12) — 부위 여러 개에 **배색 한 쌍씩**을 한 번에 거는 틴트 축([colorSets.ts](src/editor/colorSets.ts)). 한 부위만 칠하면 안 되는 게 요구였다 — 홍채만 칠하면 하이라이트가 흰색으로 남아 톤이 겉돌고, 앞머리만 칠하면 뒷머리와 어긋난다. 헤어 세트는 **눈썹까지** 소유(얼굴 파츠 소유 메시지만 라벨 매칭이라 무관). 부산물로 **눈색 이중 축 제거**: `store.eyeColor`+`partLoader.setEyeColor`(EyeIris 직접 칠하기)를 흡수해 **색을 쓰는 곳을 `applyAppearance` 하나로** 통일했다 — 예전엔 나중에 도는 쪽이 조용히 되돌렸다(눈색 고른 뒤 셰이더 슬라이더만 움직여도 풀림)
+  - ⚠️ **lit/shade 는 절대색이 아니라 텍스처 곱수다** — 관련 머티리얼 authored 값이 전부 `#ffffff`+`baseColorTexture`(6개 파일 전수 확인). 그래서 **어둡게만 가고 밝게는 못 간다**(어두운 텍스처 → 밝은 금발 불가). 밝은 쪽이 필요하면 틴트가 아니라 **텍스처 스왑**이고 별도 축이다. authored 가 전부 중립이라 '원본'=미선택으로 정확히 복원됨(원칙①)
+  - ⚠️ **부위 실재는 파츠마다 다르다** — 남자1 **헤어 1**(`Hair_sample`)은 `HairBack` 하나뿐(8개 헤어 중 유일), 속눈썹은 male_base 에만, 베이스 VRM 엔 헤어 머티리얼이 **없다**. 세트는 있는 부위에만 걸리고 나머지는 건너뛴다. 세트↔에셋 접점은 **머티리얼 이름 매칭 하나**라 [colorSets.test.ts](src/editor/colorSets.test.ts)가 실측 이름으로 고정한다
+- [ ] **후속: 테스트 확장** — 순수/준순수인데 미테스트: [store.ts](src/store.ts)(`setCharacter` 리셋·mesh patch). [meshLabels.ts](src/editor/meshLabels.ts) `LABEL_RULES` 는 색상 세트 테스트가 실측 머티리얼 이름으로 커버. `channels.ts`는 [channels.test.ts](src/companion/anim/channels.test.ts)로 일부 커버됨(총 회전량 유지·계수 0 no-op)
 - [x] **에디터 라이브 프리뷰** — `store.animPreview` 토글(**기본 OFF = 정적 편집 보존**), ON 시 컴패니언과 동일한 절차 엔진(`useAnimator`)을 ComposerAvatar가 구동. AnimationPanel 트리거는 `companion:*` window 이벤트로 DebugPanel과 같은 경로. ⚠️ **AnimationMixer 경로는 반려됨** — VRoid VRM엔 내장 클립이 없어 패널이 빈다
 - ❌ **폐기: Phase 4 스크린샷/내보내기** (2026-08-04) — 명세된 적 없는 플레이스홀더. 해석 4안(캔버스 PNG · 설정 JSON 저장 · VRM/GLB 익스포트 · 투명 PNG) 전부 원칙②(실질 개선) 미달. **재개 트리거는 "미완 Phase"가 아니라 구체적 용도다** — 그때 신규 제안으로 다룬다. 오프라인 렌더만 필요하면 이미 있는 [scripts/renderThumbs.mjs](scripts/renderThumbs.mjs)(`?thumb=`) 재사용
   - 📌 **미해결로 남긴 관찰**: 영속성 전무(`persist`/`localStorage` 0건) → 새로고침하면 파츠 조합·색·셰이더·조명·그레이딩이 전부 초기화된다. 위 폐기 판정에 따라 **의도적으로 남긴 상태**

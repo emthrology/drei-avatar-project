@@ -388,7 +388,9 @@ export interface LoadedFacePart {
   graftedBones: THREE.Object3D[]; // base Head 아래로 이식된 눈 본
   missingBones: string[];
   sync: () => void; // 매 프레임: base Face 표정 influences + 눈 lookAt 회전 → 새 Face/눈 본 미러
-  setEyeColor: (hex: string | null) => void; // 텍스처/머티리얼 축: 눈(EyeIris) 색 — 형태와 독립
+  // 눈색은 여기 없다 — 부위 틴트(editor/colorSets)가 소유하고 적용은 appearance 한 곳뿐이다.
+  // 예전엔 이 로더가 EyeIris 머티리얼을 직접 칠했는데, 같은 머티리얼에 쓰는 주체가 둘이 되어
+  // 나중에 도는 applyAppearance 가 조용히 되돌렸다(눈색 고른 뒤 셰이더 슬라이더만 움직여도 풀림).
   setVisible: (v: boolean) => void;
   dispose: () => void;
 }
@@ -495,40 +497,7 @@ export async function loadFacePart(
     for (const [b, g] of eyePairs) g.quaternion.copy(b.quaternion);
   };
 
-  // 5) 텍스처/머티리얼 축(눈색): EyeIris 머티리얼 색 노브. 얼굴 '모양'(메시 교체)과 독립된 별도 축임을
-  //    증명. 실제 변형 카탈로그는 baseColorTexture 교체(저작 PNG 세트)지만, 색 곱도 같은 머티리얼 노브다.
-  //    base·새 얼굴 양쪽 EyeIris 에 적용(토글 상태 무관).
-  const eyeIrisMats: THREE.Material[] = [];
-  for (const m of [...baseFaceMeshes, ...meshes]) {
-    const mats = Array.isArray(m.material) ? m.material : [m.material];
-    for (const mat of mats)
-      if (mat && /EyeIris/i.test(mat.name)) eyeIrisMats.push(mat);
-  }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const colorOf = (mat: any): THREE.Color | null =>
-    mat?.color?.isColor
-      ? mat.color
-      : mat?.uniforms?.litFactor?.value?.isColor
-        ? mat.uniforms.litFactor.value
-        : null;
-  const eyeIrisOrig = new Map<THREE.Material, THREE.Color>();
-  for (const mat of eyeIrisMats) {
-    const c = colorOf(mat);
-    if (c) eyeIrisOrig.set(mat, c.clone());
-  }
-  const setEyeColor = (hex: string | null) => {
-    for (const mat of eyeIrisMats) {
-      const c = colorOf(mat);
-      if (!c) continue;
-      if (hex) c.set(hex);
-      else {
-        const o = eyeIrisOrig.get(mat);
-        if (o) c.copy(o);
-      }
-    }
-  };
-
-  // 6) 가시성: 새 얼굴 ON → base 얼굴 숨김(겹침 방지) / OFF → base 얼굴 복원.
+  // 5) 가시성: 새 얼굴 ON → base 얼굴 숨김(겹침 방지) / OFF → base 얼굴 복원.
   //    숨길 때 base 얼굴에 SHADOWED_BY_PART 표식 → 에디터 리스트가 제외(중복 행·토글 충돌 차단).
   const setVisible = (v: boolean) => {
     meshes.forEach((m) => {
@@ -560,7 +529,6 @@ export async function loadFacePart(
     graftedBones,
     missingBones,
     sync,
-    setEyeColor,
     setVisible,
     dispose,
   };

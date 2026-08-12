@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useAvatarStore } from '../store';
+import { ownedLabels } from '../editor/colorSets';
+import type { PartLabel } from '../editor/meshLabels';
 import { Section } from './Section';
 import { ShaderPanel } from './ShaderPanel';
 import { LightPanel } from './LightPanel';
@@ -7,8 +9,17 @@ import { GradingPanel } from './GradingPanel';
 import { AnimationPanel } from './AnimationPanel';
 
 export function EditorPanel() {
-  const { meshInfos, setMeshVisible, setMeshLitColor, setMeshShadeColor } =
-    useAvatarStore();
+  const {
+    meshInfos,
+    setMeshVisible,
+    setMeshLitColor,
+    setMeshShadeColor,
+    colorSets,
+  } = useAvatarStore();
+
+  // 색상 세트가 소유한 부위는 메시별 색이 세트에 덮인다(appearance 의 우선순위). 조용히
+  // 안 먹게 두지 않고 입력을 잠그고 이유를 적는다 — 좌측 피커에서 '원본'을 고르면 풀린다.
+  const owned = ownedLabels(colorSets);
 
   const [selectedMesh, setSelectedMesh] = useState<string | null>(null);
   // 단일 오픈 아코디언: 한 번에 하나만 펼침(같은 헤더 재클릭 시 닫힘)
@@ -85,15 +96,23 @@ export function EditorPanel() {
                     {selected.label || selected.name}
                   </p>
 
+                  {owned.has(selected.label as PartLabel) && (
+                    <p className="text-[11px] text-amber-400/90 leading-snug">
+                      색상 세트가 이 부위를 칠하는 중입니다. 개별 색을 쓰려면
+                      좌측 피커에서 세트를 '원본'으로 되돌리세요.
+                    </p>
+                  )}
+
                   <label className="flex flex-col gap-1">
                     <span className="text-xs text-gray-400">Lit (밝은 면)</span>
                     <input
                       type="color"
                       value={selected.litColor}
+                      disabled={owned.has(selected.label as PartLabel)}
                       onChange={(e) =>
                         setMeshLitColor(selected.name, e.target.value)
                       }
-                      className="w-full h-8 rounded cursor-pointer bg-transparent border border-gray-700"
+                      className="w-full h-8 rounded cursor-pointer bg-transparent border border-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
                     />
                   </label>
 
@@ -104,10 +123,11 @@ export function EditorPanel() {
                     <input
                       type="color"
                       value={selected.shadeColor}
+                      disabled={owned.has(selected.label as PartLabel)}
                       onChange={(e) =>
                         setMeshShadeColor(selected.name, e.target.value)
                       }
-                      className="w-full h-8 rounded cursor-pointer bg-transparent border border-gray-700"
+                      className="w-full h-8 rounded cursor-pointer bg-transparent border border-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
                     />
                   </label>
                 </div>
