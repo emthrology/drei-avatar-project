@@ -8,6 +8,11 @@ import {
   getCharacter,
   defaultSelection,
 } from './editor/constants';
+import {
+  NO_COLOR_SETS,
+  type ColorSetAxis,
+  type ColorSetSelection,
+} from './editor/colorSets';
 
 export interface MeshInfo {
   name: string; // 씬 메시 이름 — 매칭/색 적용 키(고유). React key 로도 사용
@@ -60,7 +65,7 @@ export const GRADING_DEFAULTS: GradingParams = {
 };
 
 // ─── 에디터 조립 슬라이스 (composer 엔진) ──────────────────────────────────────
-// 캐릭터(base) 축 + 슬롯 선택(swap-on-select) + 파츠 로드 상태 + 눈색(텍스처 축).
+// 캐릭터(base) 축 + 슬롯 선택(swap-on-select) + 파츠 로드 상태 + 색상 세트(틴트 축).
 // Three.js 객체는 절대 넣지 않음(엔진은 module singleton/ref 로 씬 보유) — 여긴 선택 데이터만.
 const idleStatus = (characterId: CharacterId): Record<string, PartStatus> =>
   Object.fromEntries(
@@ -74,11 +79,13 @@ interface AvatarState {
   // 에디터 조립 슬라이스
   characterId: CharacterId;
   selection: Selection;
-  eyeColor: string | null;
+  // 색상 세트(헤어/눈동자) — 부위 배색을 한 번에 거는 틴트 축. 적용은 appearance.applyAppearance
+  // 한 곳에서만(세트 > 메시별 색). 예전 단일 hex 눈색 축(eyeColor)을 흡수한 것.
+  colorSets: ColorSetSelection;
   partStatus: Record<string, PartStatus>;
-  setCharacter: (id: CharacterId) => void; // base 전환 → 선택/상태/눈색 리셋
+  setCharacter: (id: CharacterId) => void; // base 전환 → 선택/상태/색상세트 리셋
   setSelection: (cat: PartCategory, variantId: string | null) => void;
-  setEyeColor: (hex: string | null) => void;
+  setColorSet: (axis: ColorSetAxis, id: string | null) => void;
   setPartStatus: (id: string, status: PartStatus) => void;
 
   meshInfos: MeshInfo[];
@@ -108,9 +115,9 @@ export const useAvatarStore = create<AvatarState>((set) => ({
 
   characterId: 'male1',
   selection: defaultSelection(getCharacter('male1').catalog),
-  eyeColor: null,
+  colorSets: NO_COLOR_SETS,
   partStatus: idleStatus('male1'),
-  // base 전환: 선택·상태·눈색을 새 캐릭터 기준으로 리셋(이전 base 파츠 키 잔류 방지).
+  // base 전환: 선택·상태·색상세트를 새 캐릭터 기준으로 리셋(이전 base 파츠 키 잔류 방지).
   // meshInfos 도 비움 → 새 base 로드 후 ComposerAvatar 가 재수집.
   setCharacter: (id) =>
     set((s) =>
@@ -120,13 +127,14 @@ export const useAvatarStore = create<AvatarState>((set) => ({
             characterId: id,
             selection: defaultSelection(getCharacter(id).catalog),
             partStatus: idleStatus(id),
-            eyeColor: null,
+            colorSets: NO_COLOR_SETS,
             meshInfos: [],
           },
     ),
   setSelection: (cat, variantId) =>
     set((s) => ({ selection: { ...s.selection, [cat]: variantId } })),
-  setEyeColor: (hex) => set({ eyeColor: hex }),
+  setColorSet: (axis, id) =>
+    set((s) => ({ colorSets: { ...s.colorSets, [axis]: id } })),
   setPartStatus: (id, status) =>
     set((s) => ({ partStatus: { ...s.partStatus, [id]: status } })),
 

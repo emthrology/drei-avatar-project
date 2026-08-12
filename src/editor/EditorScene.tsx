@@ -35,8 +35,8 @@ export function EditorScene() {
   const selection = useAvatarStore((s) => s.selection);
   const partStatus = useAvatarStore((s) => s.partStatus);
   const setSelection = useAvatarStore((s) => s.setSelection);
-  const eyeColor = useAvatarStore((s) => s.eyeColor);
-  const setEyeColor = useAvatarStore((s) => s.setEyeColor);
+  const colorSets = useAvatarStore((s) => s.colorSets);
+  const setColorSet = useAvatarStore((s) => s.setColorSet);
 
   const character = getCharacter(characterId);
 
@@ -65,8 +65,8 @@ export function EditorScene() {
             selection={selection}
             status={partStatus}
             onSelect={setSelection}
-            eyeColor={eyeColor}
-            onEyeColor={setEyeColor}
+            colorSets={colorSets}
+            onColorSet={setColorSet}
           />
         </div>
       </div>
