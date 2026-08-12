@@ -19,6 +19,20 @@ const BROWSE: VrmaClipDef[] = [
     from: 2.9,
     to: 5.9,
   },
+  // 박수는 트림 구간 선택이 육안 판단이라 **전체를 볼 수 있어야** 한다.
+  // 원본/보정본을 나란히 두면 에셋 보정(= **손가락 펴기만**) 효과도 바로 비교된다.
+  // 접촉 간격은 에셋이 아니라 런타임(`minPalmGap`)이 맞추므로 여기 두 항목엔 안 걸린다 —
+  // 정식 카탈로그 재생(아래 '박수 (VRMA·정식)')과 비교해야 보정된 접촉이 보인다.
+  {
+    id: 'clap-src',
+    label: '★ 원본 박수 (무보정)',
+    url: '/animations/clap-src.vrma',
+  },
+  {
+    id: 'clap-full',
+    label: '★ 박수 보정본 (전체)',
+    url: '/animations/clap.vrma',
+  },
   { id: 'v01', label: '01 전신보이기', url: '/animations/VRMA_01.vrma' },
   { id: 'v02', label: '02 인사', url: '/animations/VRMA_02.vrma' },
   {
@@ -36,6 +50,11 @@ const play = (def: VrmaClipDef) =>
   window.dispatchEvent(new CustomEvent('companion:vrma', { detail: def }));
 const wave = () => window.dispatchEvent(new Event('companion:wave'));
 const waveProc = () => window.dispatchEvent(new Event('companion:wave-proc'));
+// 정식 카탈로그의 트림·블렌드가 적용된 박수 (전체 재생과 비교용)
+const clap = () =>
+  window.dispatchEvent(
+    new CustomEvent('companion:vrma', { detail: { id: 'clap' } }),
+  );
 
 export function VrmaPanel() {
   return (
@@ -56,6 +75,12 @@ export function VrmaPanel() {
           className="py-1 px-2 rounded text-xs bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors"
         >
           손인사 (절차·기준선)
+        </button>
+        <button
+          onClick={clap}
+          className="py-1 px-2 rounded text-xs bg-indigo-900/50 text-indigo-200 hover:bg-indigo-800/60 transition-colors"
+        >
+          박수 (VRMA·정식)
         </button>
       </div>
 

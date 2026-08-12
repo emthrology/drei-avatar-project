@@ -5,7 +5,16 @@
 // "측정기를 먼저 검증"하는 셈. (testing-strategy: 구현이 아닌 불변식을 테스트)
 
 import { describe, it, expect } from 'vitest';
-import { measureArm, evaluateArm, WAVE_TARGETS, type ArmSample } from './probe';
+import {
+  measureArm,
+  evaluateArm,
+  WAVE_TARGETS,
+  countClaps,
+  measureClap,
+  evaluateClap,
+  type ArmSample,
+  type ClapSample,
+} from './probe';
 
 const IDENT: ArmSample['armQuat'] = [0, 0, 0, 1];
 
@@ -246,5 +255,148 @@ describe('evaluateArm — 실패 기록 재현 (docs/wave-gesture-attempts.md)',
         (c) => c.name === '흔들림 주축',
       )?.pass,
     ).toBe(true);
+  });
+});
+
+// ── 양손 동작(박수) ────────────────────────────────────────────────────────
+//
+// 여기서 고정하는 불변식은 "박수와 **박수가 아닌 것**을 가른다"이다. 특히 VRMA_07 처럼
+// **손이 만나긴 하는데 손바닥이 비스듬한** 케이스를 통과시키면 측정기가 무의미해진다
+// (실측: 진짜 박수 정렬 0.87~1.00 vs VRMA_07 접촉 0.14~0.43).
+//
+// 나머지 두 실패 모드는 **리타게팅 때문에 생긴다** — 회전만 옮겨지고 손 위치는 체형을 타므로
+// 한 캐릭터에서 맞은 손이 다른 캐릭터에선 겹치거나(관통) 안 닿는다(허공 박수).
+
+/** 합성 박수 샘플 — 간격을 코사인으로 흔들고 손바닥 정렬은 상수로 준다 */
+function mkClap(
+  opts: {
+    claps?: number;
+    min?: number;
+    max?: number;
+    align?: number;
+    midY?: number;
+    cross?: boolean;
+  } = {},
+): ClapSample[] {
+  const {
+    claps = 5,
+    min = 0.03,
+    max = 0.16,
+    align = 0.95,
+    midY = 0.23,
+    cross = false,
+  } = opts;
+  const perClap = 10;
+  const out: ClapSample[] = [];
+  for (let i = 0; i < claps * perClap; i++) {
+    // **벌어진 위상에서 시작**한다 — 접촉에서 시작하면 첫 프레임과 첫 주기 끝의 접촉이
+    // 별개 episode 로 세어져 횟수가 1 더 나온다(경계 효과).
+    const phase = ((i % perClap) / perClap + 0.5) % 1;
+    const gap = min + (max - min) * (1 - Math.cos(2 * Math.PI * phase)) * 0.5;
+    out.push({
+      t: i * 0.03,
+      // 판정은 손바닥 중심 거리로 한다 — 손목 거리는 참고치라 같은 값을 넣어 둔다
+      palmGap: gap,
+      gap,
+      midY,
+      midZ: 0.18,
+      // 좌우 손은 미러라 법선 부호가 같은 쪽으로 잡힌다 — 판정은 절댓값으로 한다
+      alignL: -align,
+      alignR: -align,
+      // 좌우 간격은 접촉에서 최소 — 교차 케이스는 음수까지 내려간다
+      sepX: cross ? gap - min - 0.02 : gap,
+    });
+  }
+  return out;
+}
+
+describe('countClaps', () => {
+  it('히스테리시스로 접촉 근방의 떨림을 한 번으로 센다', () => {
+    // 접촉선(0.12)을 오르내리며 떨리지만 release(0.15)를 안 넘으면 계속 같은 1회
+    const jitter = [0.2, 0.11, 0.13, 0.119, 0.14, 0.118, 0.2, 0.1, 0.2];
+    expect(countClaps(jitter, 0.12, 0.15)).toBe(2);
+  });
+
+  it('벌어지지 않고 붙어만 있으면 1회', () => {
+    expect(countClaps([0.2, 0.05, 0.05, 0.05, 0.05], 0.12, 0.15)).toBe(1);
+  });
+
+  it('한 번도 안 붙으면 0회', () => {
+    expect(countClaps([0.3, 0.25, 0.22, 0.3], 0.12, 0.15)).toBe(0);
+  });
+});
+
+describe('evaluateClap', () => {
+  it('제대로 된 박수는 통과한다', () => {
+    const v = evaluateClap(mkClap());
+    expect(v.pass).toBe(true);
+    expect(v.claps).toBe(5);
+  });
+
+  it('손은 만나지만 손바닥이 비스듬하면 떨어뜨린다 (VRMA_07 실패 모드)', () => {
+    const v = evaluateClap(mkClap({ align: 0.3 }));
+    expect(v.checks.find((c) => c.name === '손바닥 정렬')?.pass).toBe(false);
+    expect(v.pass).toBe(false);
+    // 접촉 자체는 성립한다 — 정렬만 골라서 떨어뜨렸는지 확인(지표 분리 검증)
+    expect(v.checks.find((c) => c.name === '접촉')?.pass).toBe(true);
+  });
+
+  it('손바닥이 손 두께보다 가까우면 떨어뜨린다 (리타게팅 관통)', () => {
+    const v = evaluateClap(mkClap({ min: 0.005 }));
+    expect(v.checks.find((c) => c.name === '비관통')?.pass).toBe(false);
+  });
+
+  it('접촉 판정은 손목이 아니라 **손바닥 중심** 거리로 한다', () => {
+    // 손목은 손바닥 안쪽에 있어 맞닿으면 거의 일치한다 → 손목 거리로 재면 허공 박수를
+    // 통과시킨다(실측 반증: 손목 +0.081 인데 육안은 "갖다 대지도 않음").
+    const airClap = mkClap({ min: 0.09 }).map((s) => ({ ...s, gap: 0.01 }));
+    expect(evaluateClap(airClap).checks.find((c) => c.name === '접촉')?.pass).toBe(
+      false,
+    );
+  });
+
+  it('손바닥 정렬은 붙은 프레임을 빼고 접근 구간에서만 잰다', () => {
+    // 접촉 근방에서 축이 퇴화해 값이 뒤집혀도(실측 male1) 판정이 흔들리면 안 된다
+    const s = mkClap();
+    const polluted = s.map((x) =>
+      x.gap < 0.08 ? { ...x, alignL: 0.02, alignR: -0.03 } : x,
+    );
+    expect(evaluateClap(polluted).align).toBeCloseTo(evaluateClap(s).align, 6);
+  });
+
+  it('손이 안 닿으면 떨어뜨린다 (리타게팅 허공 박수)', () => {
+    const v = evaluateClap(mkClap({ min: 0.12, max: 0.3 }));
+    expect(v.checks.find((c) => c.name === '접촉')?.pass).toBe(false);
+    expect(v.checks.find((c) => c.name === '박수 횟수')?.pass).toBe(false);
+  });
+
+  it('붙어만 있고 치지 않으면 떨어뜨린다', () => {
+    expect(
+      evaluateClap(mkClap({ min: 0.02, max: 0.05 })).checks.find(
+        (c) => c.name === '벌림폭',
+      )?.pass,
+    ).toBe(false);
+  });
+
+  it('손이 얼굴을 가릴 높이면 떨어뜨린다 (올린 박수를 트림으로 뺀 이유)', () => {
+    expect(
+      evaluateClap(mkClap({ midY: 0.7 })).checks.find(
+        (c) => c.name === '손 높이',
+      )?.pass,
+    ).toBe(false);
+  });
+
+  it('빈 샘플은 0으로 떨어진다 (크래시 없음)', () => {
+    expect(measureClap([])).toEqual({
+      minPalmGap: 0,
+      maxPalmGap: 0,
+      minGap: 0,
+      maxGap: 0,
+      claps: 0,
+      minSep: 0,
+      align: 0,
+      handY: 0,
+      handZ: 0,
+    });
   });
 });
