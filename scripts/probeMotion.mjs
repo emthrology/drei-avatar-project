@@ -8,6 +8,7 @@
 //   npm run probe                     기본(오른팔, idle 상태 3초)
 //   npm run probe -- --gesture 3      제스처 3번 트리거 후 측정
 //   npm run probe -- --wave           손인사 트리거 후 흔드는 구간만 측정
+//   npm run probe -- --clap           박수 트리거 후 **양손 관계** 측정(접촉·손바닥 정렬·횟수)
 //   npm run probe -- --wait 500       트리거~녹화 시작 대기(전환 구간 제외)
 //   npm run probe -- --side L --ms 4000
 //   npm run probe -- --json           원시 샘플까지 JSON 으로 (그래프·재분석용)
@@ -41,6 +42,14 @@ const GESTURES =
         .split(',')
         .map((s) => s.trim());
 const WAVE = has('wave');
+// 박수 — 양손 관계를 재는 별도 모드(anim/probe.ts sampleClap). 단일 팔 지표로는 접촉·손바닥
+// 정렬이 구조적으로 안 보인다.
+//
+// 창을 손인사처럼 "전환 구간 제외"로 잡지 **않는다**. 박수는 클립이 짧아 fadeIn/Out 을 빼면
+// 횟수를 셀 표본이 안 남는다. 대신 **거의 전 구간**을 재는데, 블렌드 구간이 섞여도 접촉 판정은
+// **보수적으로만** 틀린다 — 가중치가 낮은 프레임은 손이 idle 쪽(더 벌어짐)이라 없는 접촉을
+// 만들어내지 못한다. 손바닥 정렬도 접촉 프레임(gap ≤ contactGap)에서만 평균 내므로 안 섞인다.
+const CLAP = has('clap');
 // 한 측정이 끝나고 다음 트리거까지 팔이 rest 로 돌아올 시간
 const SETTLE = Number(arg('settle', 1600));
 // 트리거 후 녹화 시작까지 대기(ms). 팔을 드는 **전환 구간**을 빼고 흔드는 구간만 재기 위한 것.
@@ -49,8 +58,9 @@ const SETTLE = Number(arg('settle', 1600));
 // 손인사 기본값은 VRMA 판(anim/vrma/clips.ts VRMA_WAVE)의 타이밍에 맞춘 것:
 //   클립 3.0s = fadeIn 400ms + 흔들기 + fadeOut 500ms → 안정 구간 500~2400ms 를 잰다.
 //   (창을 클립보다 길게 잡으면 팔이 내려오는 복귀 구간까지 섞여 주축·정지도가 전부 깨진다)
-const WAIT = Number(arg('wait', WAVE ? 500 : 120));
-const MS = Number(arg('ms', WAVE ? 1900 : 3000));
+// 박수 창: 트림 0.78s × repeat 2 = 1.56s. 진입 블렌드만 살짝 피하고 거의 전 구간을 잰다.
+const WAIT = Number(arg("wait", WAVE ? 500 : CLAP ? 400 : 120));
+const MS = Number(arg("ms", WAVE ? 1900 : CLAP ? 1000 : 3000));
 const CHAR = arg('char', null);
 const AS_JSON = has('json');
 
@@ -78,7 +88,7 @@ function report(r) {
     return;
   }
   console.log(
-    `\n${r.pass ? '✅ PASS' : '❌ FAIL'}  ${r.side}팔 · ${r.sampleCount}샘플 / ${r.durationMs}ms`,
+    `\n${r.pass ? '✅ PASS' : '❌ FAIL'}  ${r.mode === 'clap' ? '양손' : `${r.side}팔`} · ${r.sampleCount}샘플 / ${r.durationMs}ms`,
   );
   console.log('─'.repeat(58));
   for (const c of r.checks) {
@@ -88,6 +98,18 @@ function report(r) {
     );
   }
   console.log('─'.repeat(58));
+  if (r.mode === 'clap') {
+    console.log(
+      `  손바닥간격 ${r.minPalmGap.toFixed(4)} ~ ${r.maxPalmGap.toFixed(4)}m · 박수 ${r.claps}회 · 정렬 ${r.align.toFixed(3)}`,
+    );
+    console.log(
+      `  (참고) 손목간격 ${r.minGap.toFixed(4)} ~ ${r.maxGap.toFixed(4)}m · 좌우최소 ${r.minSep.toFixed(4)}`,
+    );
+    console.log(
+      `  두 손 중점  y=${r.handY.toFixed(3)} z=${r.handZ.toFixed(3)} (Hips 기준)\n`,
+    );
+    return;
+  }
   console.log(
     `  손목  span x=${r.span.x.toFixed(4)} y=${r.span.y.toFixed(4)} z=${r.span.z.toFixed(4)}  ` +
       `주축=${r.swingAxis}`,
@@ -149,13 +171,14 @@ async function main() {
       if (trigger) await trigger();
       await new Promise((r) => setTimeout(r, WAIT));
       await page.evaluate(
-        (ms, side) => {
+        (ms, side, mode) => {
           window.dispatchEvent(
-            new CustomEvent('companion:probe', { detail: { ms, side } }),
+            new CustomEvent('companion:probe', { detail: { ms, side, mode } }),
           );
         },
         MS,
         SIDE,
+        CLAP ? 'clap' : 'arm',
       );
       await page.waitForFunction('window.__probeResult !== undefined', {
         timeout: MS + 20000,
@@ -168,7 +191,15 @@ async function main() {
     }
 
     let result;
-    if (WAVE) {
+    if (CLAP) {
+      result = await runOnce(() =>
+        page.evaluate(() =>
+          window.dispatchEvent(
+            new CustomEvent('companion:vrma', { detail: { id: 'clap' } }),
+          ),
+        ),
+      );
+    } else if (WAVE) {
       result = await runOnce(() =>
         page.evaluate(() =>
           window.dispatchEvent(new CustomEvent('companion:wave')),

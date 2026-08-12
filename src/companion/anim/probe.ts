@@ -304,9 +304,9 @@ export function measureArm(samples: ArmSample[]): ArmMetrics {
   };
 }
 
-/** 손바닥 법선 → [바깥향(측면), 정면향] 코사인. 손가락 본이 없으면 [0,0] */
-function palmNormal(s: ArmSample): [number, number] {
-  if (!s.indexBase || !s.littleBase) return [0, 0];
+/** 손바닥 평면의 단위 법선 (Hips 로컬). 손가락 본이 없으면 null */
+function palmNormalVec(s: ArmSample): [number, number, number] | null {
+  if (!s.indexBase || !s.littleBase) return null;
   const a = [
     s.indexBase[0] - s.hand[0],
     s.indexBase[1] - s.hand[1],
@@ -318,16 +318,309 @@ function palmNormal(s: ArmSample): [number, number] {
     s.littleBase[2] - s.hand[2],
   ];
   // 외적 = 손바닥 평면의 법선
-  const n = [
+  const n: [number, number, number] = [
     a[1] * b[2] - a[2] * b[1],
     a[2] * b[0] - a[0] * b[2],
     a[0] * b[1] - a[1] * b[0],
   ];
   const len = Math.hypot(n[0], n[1], n[2]);
-  if (len < 1e-9) return [0, 0];
+  if (len < 1e-9) return null;
+  return [n[0] / len, n[1] / len, n[2] / len];
+}
+
+/** 손바닥 법선 → [바깥향(측면), 정면향] 코사인. 손가락 본이 없으면 [0,0] */
+function palmNormal(s: ArmSample): [number, number] {
+  const n = palmNormalVec(s);
+  if (!n) return [0, 0];
   // 바깥 = 팔이 달린 쪽(어깨의 x 부호). 정면 = +z (아바타가 바라보는 방향 = 카메라 쪽).
   const outward = Math.sign(s.shoulder[0]) || 1;
-  return [(n[0] / len) * outward, n[2] / len];
+  return [n[0] * outward, n[2]];
+}
+
+// ── 양손 동작(박수) ────────────────────────────────────────────────────────
+//
+// 왜 별도 지표인가: 기존 `ArmMetrics` 는 **한쪽 팔의 자세**를 잰다. 박수의 성패는 자세가 아니라
+// **두 손의 관계**(붙었나 · 손바닥끼리인가 · 몇 번인가)라서 단일 팔로는 구조적으로 안 보인다.
+//
+// ⚠️ 그리고 이게 손인사에 없던 위험이다 — **접촉은 위치 제약인데 VRMA 는 회전만 담는다.**
+// 리타게팅은 회전을 옮길 뿐 손 위치를 보장하지 않아서, 팔 길이가 다르면 한 캐릭터에서 맞은 손이
+// 다른 캐릭터에선 허공이거나 관통이다(실측 근거: 같은 30° 에서 손끝 이동폭 남자1 0.131 /
+// 여자1 0.096). 손인사에선 진폭 차이로 끝나 무해했다. **그래서 양 캐릭터 측정이 필수다.**
+
+/** 한 프레임의 **양손 관계** 스냅샷. 위치는 전부 Hips 로컬. */
+export interface ClapSample {
+  t: number;
+  /**
+   * 양 **손바닥 중심** 거리(m) = 접촉의 진짜 척도. 중심 = mean(손목, 검지밑, 소지밑).
+   *
+   * ⚠️ **손목 거리로 접촉을 재면 안 된다** (2026-08-11, 육안 반증으로 교체). Hand 본 원점은
+   * 손바닥 **안쪽**에 있어서, 두 손바닥이 실제로 맞닿으면 손목 원점끼리는 거의 일치하거나
+   * 살짝 교차한다. 그걸 "관통"으로 보고 상완을 벌렸더니 **손바닥이 4~6cm 떠서 허공을 치는데도
+   * 프로브는 PASS** 했다(실측: 손목 간격 남자1 +0.081 / 여자1 +0.040 인데 육안은 "갖다 대지도
+   * 않는다"). 손바닥 중심은 손바닥 한가운데라 이 왜곡이 없고, 맞닿으면 손 두께만큼만 떨어진다.
+   */
+  palmGap: number;
+  /** 양 손목 거리(m) — 진단용 참고치. **판정에는 쓰지 않는다**(위 주석) */
+  gap: number;
+  /** 두 손 중점 높이·전방 (Hips 기준) — 프레이밍 판정용 */
+  midY: number;
+  midZ: number;
+  /**
+   * 손바닥 법선과 **접촉축**(왼손→오른손)의 정렬. |·|≈1 이면 손바닥이 서로를 정면으로 향한다
+   * = 박수. 손이 만나기만 하고 손바닥이 비스듬하면 작다(실측: 진짜 박수 0.87~1.00 vs
+   * VRMA_07 의 "손이 스치는" 접촉 0.14~0.43). 손가락 본이 없으면 0.
+   *
+   * ⚠️ **손이 거의 붙은 프레임에서는 이 값이 무의미하다** — 축이 `(R−L)/|R−L|` 라서 간격이
+   * 0 으로 가면 방향이 잔차에 지배되고, 손목이 교차하는 순간 **부호가 뒤집힌다**.
+   * 실측(male1): 간격 0.08 이상에서 0.76~0.86 으로 안정적인데 0.04 미만에서 0.25 로 무너지고
+   * 8프레임(130ms) 만에 −0.58 → +0.71 → −0.28 로 진동한다(손바닥이 그렇게 돌 수는 없다).
+   * → 판정은 `alignGapMin` 이상인 **접근 구간**에서만 한다.
+   */
+  alignL: number;
+  alignR: number;
+  /**
+   * 두 손의 **부호 있는** 좌우 간격(왼손 x − 오른손 x). 손이 교차하면 부호가 뒤집힌다
+   * = 손바닥이 서로를 통과했다는 뜻. 거리 하한(추정치)보다 직접적인 관통 판정이다.
+   */
+  sepX: number;
+}
+
+/** 현재 프레임의 양손 관계. `vrm.update(delta)` **이후**에 호출할 것. */
+export function sampleClap(vrm: VRM, t: number): ClapSample | null {
+  const L = sampleArm(vrm, 'L', t);
+  const R = sampleArm(vrm, 'R', t);
+  if (!L || !R) return null;
+
+  const d = [R.hand[0] - L.hand[0], R.hand[1] - L.hand[1], R.hand[2] - L.hand[2]];
+  const gap = Math.hypot(d[0], d[1], d[2]);
+
+  // 손바닥 중심 = 손목·검지밑·소지밑의 평균. 손가락 본이 없으면 손목으로 대체(값이 손목 거리와
+  // 같아지지만, 그런 모델은 애초에 손바닥 판정 대상이 아니다)
+  const palmCenter = (s: ArmSample): [number, number, number] =>
+    s.indexBase && s.littleBase
+      ? [
+          (s.hand[0] + s.indexBase[0] + s.littleBase[0]) / 3,
+          (s.hand[1] + s.indexBase[1] + s.littleBase[1]) / 3,
+          (s.hand[2] + s.indexBase[2] + s.littleBase[2]) / 3,
+        ]
+      : s.hand;
+  const pL = palmCenter(L);
+  const pR = palmCenter(R);
+  const palmGap = Math.hypot(pR[0] - pL[0], pR[1] - pL[1], pR[2] - pL[2]);
+  const axis = gap < 1e-9 ? [0, 0, 0] : [d[0] / gap, d[1] / gap, d[2] / gap];
+  const nL = palmNormalVec(L);
+  const nR = palmNormalVec(R);
+  const proj = (n: [number, number, number] | null) =>
+    n ? n[0] * axis[0] + n[1] * axis[1] + n[2] * axis[2] : 0;
+
+  return {
+    t,
+    palmGap,
+    gap,
+    midY: (L.hand[1] + R.hand[1]) / 2,
+    midZ: (L.hand[2] + R.hand[2]) / 2,
+    alignL: proj(nL),
+    alignR: proj(nR),
+    sepX: L.hand[0] - R.hand[0],
+  };
+}
+
+export interface ClapMetrics {
+  /** 최소 **손바닥 중심** 거리(m) — 접촉 판정의 주 지표. 크면 허공, 너무 작으면 겹침 */
+  minPalmGap: number;
+  /** 최대 손바닥 중심 거리(m). 작으면 붙어만 있고 치지 않는다 */
+  maxPalmGap: number;
+  /** 최소 손목 간격(m) — 진단용 참고치 */
+  minGap: number;
+  /** 최대 손목 간격(m) — 진단용 참고치 */
+  maxGap: number;
+  /** 접촉 횟수 (히스테리시스 — 아래 countClaps) */
+  claps: number;
+  /**
+   * 최소 **부호 있는** 좌우 간격(m). 벌어진 자세의 부호를 기준으로 정렬해서 재므로,
+   * 음수면 두 손이 교차했다 = 관통.
+   */
+  minSep: number;
+  /** **접근 구간**(gap ∈ [alignGapMin, releaseGap])의 손바닥 정렬 |·| (양손 중 나쁜 쪽) */
+  align: number;
+  /** 두 손 중점의 평균 높이·전방 (Hips 기준) — 프레임 이탈·얼굴 가림 판정 */
+  handY: number;
+  handZ: number;
+}
+
+/**
+ * 접촉 횟수 — 단순 임계 통과 카운트가 아니라 **히스테리시스**를 쓴다.
+ * 임계 하나로 세면 접촉 근방에서 값이 떨릴 때 한 번의 박수가 여러 번으로 세어진다.
+ * `contact` 이하로 내려가면 1회 세고, 다시 `release` 이상으로 벌어져야 다음 회를 센다.
+ */
+export function countClaps(
+  gaps: number[],
+  contact: number,
+  release: number,
+): number {
+  let n = 0;
+  let closed = false;
+  for (const g of gaps) {
+    if (!closed && g <= contact) {
+      n++;
+      closed = true;
+    } else if (closed && g >= release) {
+      closed = false;
+    }
+  }
+  return n;
+}
+
+export interface ClapTargets {
+  /** 접촉으로 인정할 **손바닥 중심** 거리 상한(m) */
+  contactGap: number;
+  /** 다음 접촉을 세기 위해 벌어져야 하는 손바닥 중심 거리(m) */
+  releaseGap: number;
+  /**
+   * 손바닥 정렬을 재기 시작할 최소 **손목** 간격(m). 이보다 붙으면 접촉축이 퇴화해 값이
+   * 무의미하다(ClapSample.alignL 주석의 실측 참조). 여기만 손목 거리를 쓴다 — 퇴화하는 축이
+   * 손목 기준이기 때문.
+   */
+  alignGapMin: number;
+  /**
+   * 정렬 측정 구간의 상한(손목 간격, m). 위 하한과 짝. 너무 벌어진 프레임(블렌드 중 idle 쪽
+   * 팔)까지 넣으면 박수와 무관한 손 방향이 섞인다. **`releaseGap` 과 스케일이 다르므로
+   * (저쪽은 손바닥 중심 기준) 재사용하지 않는다.**
+   */
+  alignGapMax: number;
+  /** 손바닥이 서로 파고들지 않을 최소 중심 거리(m). 손 두께보다 작으면 메시가 겹친다 */
+  minPalmGapFloor: number;
+  /** 박수로 보이려면 이만큼은 벌어져야 */
+  minMaxGap: number;
+  /** 측정 창에서 최소 접촉 횟수 */
+  minClaps: number;
+  /** 손바닥끼리 마주쳐야 함 */
+  minAlign: number;
+  /** 두 손 중점 높이 범위 (Hips 기준) — 아래면 배꼽 밑, 위면 얼굴을 가린다 */
+  minHandY: number;
+  maxHandY: number;
+}
+
+/**
+ * 박수 기준 — **물리적 의미에서 정한 값**이지 실측에 맞춘 값이 아니다.
+ * (예산을 실측에 붙여 조이지 않는다 — [[budgets-are-guardrails-not-ratchets]])
+ *
+ * 소스 리그(clap.vrma 저작 리그) FK 실측은 참고용: 접촉 0.074~0.12 · 분리 0.17~0.24 ·
+ * 정렬 0.87~1.00 · 8~9회/2.3s. 리타게팅 후 우리 캐릭터에서 얼마가 나올지는 **미지수이고,
+ * 그게 이 프로브를 만든 이유다.** 미달이 나오면 임계를 내리지 말고 모션 파라미터를 고칠 것.
+ */
+export const CLAP_TARGETS: ClapTargets = {
+  // 손바닥 **중심** 기준이라 손목 기준이던 옛 값(0.12/0.15)과 스케일이 다르다.
+  // 손 두께가 ~0.02~0.03m 이므로 중심끼리 0.05m 안이면 손바닥이 닿은 상태다.
+  contactGap: 0.05,
+  releaseGap: 0.08,
+  alignGapMin: 0.08,
+  alignGapMax: 0.25,
+  minPalmGapFloor: 0.02, // 손 두께 스케일 — 이보다 가까우면 손바닥 메시가 파고든다
+  minMaxGap: 0.12,
+  minClaps: 3,
+  minAlign: 0.7,
+  minHandY: 0.1,
+  maxHandY: 0.55,
+};
+
+export interface ClapVerdict extends ClapMetrics {
+  checks: Check[];
+  pass: boolean;
+}
+
+export function measureClap(
+  samples: ClapSample[],
+  targets: ClapTargets = CLAP_TARGETS,
+): ClapMetrics {
+  if (samples.length === 0)
+    return {
+      minPalmGap: 0,
+      maxPalmGap: 0,
+      minGap: 0,
+      maxGap: 0,
+      claps: 0,
+      minSep: 0,
+      align: 0,
+      handY: 0,
+      handZ: 0,
+    };
+
+  const palmGaps = samples.map((s) => s.palmGap);
+  const gaps = samples.map((s) => s.gap);
+  // 양손 중 **나쁜 쪽**을 본다 — 한 손만 손바닥을 대고 다른 손이 비스듬하면 박수가 아니다
+  const worstAlign = (s: ClapSample) =>
+    Math.min(Math.abs(s.alignL), Math.abs(s.alignR));
+  // 접근 구간에서만 정렬을 잰다(붙은 프레임은 축이 퇴화 — ClapSample.alignL 주석)
+  const approach = samples.filter(
+    (s) => s.gap >= targets.alignGapMin && s.gap <= targets.alignGapMax,
+  );
+  const alignFrom = approach.length ? approach : samples;
+
+  // 교차 판정은 **벌어진 자세의 부호**를 기준으로 한다 — 어느 쪽이 +x 인지는 리그마다 다르다
+  const widest = samples.reduce((a, b) => (b.gap > a.gap ? b : a));
+  const openSign = Math.sign(widest.sepX) || 1;
+
+  return {
+    minPalmGap: Math.min(...palmGaps),
+    maxPalmGap: Math.max(...palmGaps),
+    minGap: Math.min(...gaps),
+    maxGap: Math.max(...gaps),
+    claps: countClaps(palmGaps, targets.contactGap, targets.releaseGap),
+    minSep: Math.min(...samples.map((s) => s.sepX * openSign)),
+    align: mean(alignFrom.map(worstAlign)),
+    handY: mean(samples.map((s) => s.midY)),
+    handZ: mean(samples.map((s) => s.midZ)),
+  };
+}
+
+export function evaluateClap(
+  samples: ClapSample[],
+  targets: ClapTargets = CLAP_TARGETS,
+): ClapVerdict {
+  const t = { ...CLAP_TARGETS, ...targets };
+  const m = measureClap(samples, t);
+
+  const checks: Check[] = [
+    {
+      name: '접촉',
+      pass: m.minPalmGap <= t.contactGap,
+      value: +m.minPalmGap.toFixed(4),
+      want: `≤${t.contactGap}`,
+    },
+    {
+      name: '비관통',
+      pass: m.minPalmGap >= t.minPalmGapFloor,
+      value: +m.minPalmGap.toFixed(4),
+      want: `≥${t.minPalmGapFloor}`,
+    },
+    {
+      name: '벌림폭',
+      pass: m.maxPalmGap >= t.minMaxGap,
+      value: +m.maxPalmGap.toFixed(4),
+      want: `≥${t.minMaxGap}`,
+    },
+    {
+      name: '박수 횟수',
+      pass: m.claps >= t.minClaps,
+      value: m.claps,
+      want: `≥${t.minClaps}`,
+    },
+    {
+      name: '손바닥 정렬',
+      pass: m.align >= t.minAlign,
+      value: +m.align.toFixed(3),
+      want: `≥${t.minAlign}`,
+    },
+    {
+      name: '손 높이',
+      pass: m.handY >= t.minHandY && m.handY <= t.maxHandY,
+      value: +m.handY.toFixed(3),
+      want: `${t.minHandY}~${t.maxHandY}`,
+    },
+  ];
+
+  return { ...m, checks, pass: checks.every((c) => c.pass) };
 }
 
 /** 지표 → 합격/불합격 판정. 실패한 체크의 이름이 곧 어느 실패 모드인지 알려준다. */

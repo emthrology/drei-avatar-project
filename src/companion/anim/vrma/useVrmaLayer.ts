@@ -26,6 +26,7 @@ import {
   createVRMAnimationClip,
   type VRMAnimation,
 } from '@pixiv/three-vrm-animation';
+import { enforcePalmGap } from './palmContact';
 import {
   VRMA_CLIPS,
   VRMA_GREET,
@@ -85,6 +86,8 @@ interface Playing {
   fadeOut: number;
   /** 재생 중 걸어둔 무드가 있으면 종료 시 되돌릴 무드 (없으면 무드 미개입) */
   moodAfter: string | null;
+  /** 손바닥 최소 간격(m). null 이면 접촉 보정 없음 = 기존 클립과 동일 경로 */
+  minPalmGap: number | null;
 }
 
 interface Options {
@@ -198,18 +201,20 @@ export function useVrmaLayer(
 
       const fadeIn = (def.fadeIn ?? 250) / 1000;
       const fadeOut = (def.fadeOut ?? 400) / 1000;
+      const total = clip.duration;
       playingRef.current = {
         action,
         bones,
         snap: bones.map(() => new THREE.Quaternion()),
         rest0: bones.map((b) => b.quaternion.clone()),
         prevOut: bones.map((b) => b.quaternion.clone()),
-        dur: clip.duration,
+        dur: total,
         t: 0,
         // 진입+복귀가 길이를 넘으면 최대 가중치에 못 닿는다 → 클립 길이에 맞춰 축소
-        fadeIn: Math.min(fadeIn, clip.duration * 0.4),
-        fadeOut: Math.min(fadeOut, clip.duration * 0.4),
+        fadeIn: Math.min(fadeIn, total * 0.4),
+        fadeOut: Math.min(fadeOut, total * 0.4),
         moodAfter: def.mood ? (def.moodAfter ?? 'neutral') : null,
+        minPalmGap: def.minPalmGap ?? null,
       };
     } catch (err) {
       console.error('[vrma] 재생 실패', def.url, err);
@@ -266,6 +271,12 @@ export function useVrmaLayer(
       for (let i = 0; i < p.bones.length; i++)
         p.bones[i].quaternion.slerp(p.snap[i], back);
     }
+    // ④ 접촉 보정 — 손바닥이 파고드는 프레임에서만 되민다(그 외엔 원본 그대로).
+    //    블렌드 **뒤**에 둔다: 되돌린 뒤의 자세가 실제로 화면에 나가는 자세이기 때문.
+    if (p.minPalmGap != null) enforcePalmGap(vrm, p.minPalmGap);
+
+    // 보정까지 끝난 **최종** 자세를 기록한다 — 다음 프레임의 '절차가 이 본을 건드렸나' 판별
+    // 기준이므로, 여기가 실제 출력과 어긋나면 소유 판별이 조용히 깨진다.
     for (let i = 0; i < p.bones.length; i++)
       p.prevOut[i].copy(p.bones[i].quaternion);
 

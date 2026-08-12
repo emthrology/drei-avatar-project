@@ -42,6 +42,12 @@ function triggerGreet() {
   );
 }
 
+function triggerClap() {
+  window.dispatchEvent(
+    new CustomEvent('companion:vrma', { detail: { id: 'clap' } }),
+  );
+}
+
 // 손동작 수치 프로브 — ms 동안 팔 기하를 샘플링해 판정(anim/probe.ts).
 // 육안 대신 수치로 보므로 "덜렁덜렁" 같은 표현이 어느 지표 불합격인지로 환원된다.
 function triggerProbe(ms = 3000, side: 'L' | 'R' = 'R') {
@@ -385,6 +391,20 @@ export function DebugPanel({
         >
           😊 인사(등장)
         </button>
+        <button
+          onClick={triggerClap}
+          style={{
+            background: '#312e81',
+            color: '#e0e7ff',
+            border: '1px solid #4f46e5',
+            borderRadius: 6,
+            padding: '4px 8px',
+            cursor: 'pointer',
+            fontSize: 11,
+          }}
+        >
+          👏 박수
+        </button>
         {GESTURE_LABELS.map((label, i) => (
           <button
             key={i}
@@ -452,7 +472,8 @@ export function DebugPanel({
               marginBottom: 4,
             }}
           >
-            {probe.pass ? '✅ PASS' : '❌ FAIL'} · {probe.side}팔 ·{' '}
+            {probe.pass ? '✅ PASS' : '❌ FAIL'} ·{' '}
+            {probe.mode === 'clap' ? '양손' : `${probe.side}팔`} ·{' '}
             {probe.sampleCount}샘플 / {probe.durationMs}ms
           </div>
           {probe.checks.map((c) => (

@@ -18,7 +18,7 @@
     "probe": "node scripts/probeMotion.mjs",
     "probe:tab": "node scripts/probeAttach.mjs",
     "motion:stat": "vitest run src/companion/anim/motionProfile.test.ts --disable-console-intercept",
-    "verify": "vitest run && npm run probe -- --wave --char male1 && npm run probe -- --wave --char female1"
+    "verify": "vitest run && npm run probe -- --wave --char male1 && npm run probe -- --wave --char female1 && npm run probe -- --clap --char male1 && npm run probe -- --clap --char female1"
   },
   "dependencies": {
     "@pixiv/three-vrm": "^3.5.3",
